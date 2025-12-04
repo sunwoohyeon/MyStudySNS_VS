@@ -1,0 +1,66 @@
+# 워크플로우 이름
+name: CI/CD - MyStudySNS Docker Build & Push to ECR
+
+# main 브랜치에 푸시될 때 자동으로 실행
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # 수동 실행 옵션
+
+# 환경 변수 설정
+env:
+  # ECR 레지스트리 URL
+  ECR_REGISTRY_HOST: 887559014388.dkr.ecr.ap-northeast-2.amazonaws.com
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  # 이미지 태그를 Git 커밋 SHA로 지정
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+
+    # 캐시/패키지 권한 설정
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Next.js 빌드 캐시 설정
+      - name: Cache Next.js Build
+        uses: actions/cache@v4
+        with:
+          path: my-study-sns/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('my-study-sns/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-
+
+      # 1. AWS 자격 증명 설정 (Secrets에서 키를 가져옴)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 2. Amazon ECR에 Docker 클라이언트 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry: ${{ env.ECR_REGISTRY_HOST }}
+
+      # 3. Docker 이미지 빌드 및 ECR에 푸시 (핵심)
+      - name: Build, tag, and push image to Amazon ECR
+        run: |
+          # Next.js 프로젝트 폴더 경로 지정
+          DOCKER_BUILD_CONTEXT=./my-study-sns
+          IMAGE=$ECR_REGISTRY_HOST/$ECR_REPOSITORY:$IMAGE_TAG
+
+          # Docker 빌드 실행
+          docker build -t $IMAGE $DOCKER_BUILD_CONTEXT
+
+          # ECR에 이미지 푸시
+          docker push $IMAGE
