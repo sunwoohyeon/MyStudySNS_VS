@@ -2,14 +2,13 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-// DELETE 함수 (쿠키 인증 버전)
+// DELETE 함수
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const postId = params.id;
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const { id: postId } = await params;
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
     // 1. 쿠키로 사용자 인증
@@ -33,7 +32,6 @@ export async function DELETE(
     }
 
     // 3. 삭제 실행 (Cascade Delete 수동 구현)
-    // 연관된 데이터(리뷰, 신고, 해시태그)를 먼저 삭제합니다.
     await supabase.from('reviews').delete().eq('post_id', postId);
     await supabase.from('reports').delete().eq('post_id', postId);
     await supabase.from('post_hashtags').delete().eq('post_id', postId);
@@ -45,19 +43,18 @@ export async function DELETE(
 
     return NextResponse.json({ message: '게시글이 성공적으로 삭제되었습니다.' }, { status: 200 });
 
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: '알 수 없는 오류가 발생했습니다.' }, { status: 500 });
   }
 }
 
-// PATCH 함수 (쿠키 인증 버전)
+// PATCH 함수
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const postId = params.id;
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const { id: postId } = await params;
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
     // 1. 쿠키로 사용자 인증
@@ -99,7 +96,7 @@ export async function PATCH(
 
     return NextResponse.json(updateData[0]);
 
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: '알 수 없는 오류가 발생했습니다.' }, { status: 500 });
   }
 }

@@ -1,23 +1,56 @@
-// src/component/Header.tsx (수정 완료)
+// src/component/Header.tsx
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from 'next/link';
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import React from 'react';
-import { BsSunFill, BsFillMoonStarsFill } from "react-icons/bs";
 import { HiMenu, HiSearch, HiOutlinePencilAlt } from "react-icons/hi";
 import { IoClose, IoNotifications, IoPersonCircleOutline, IoDocumentTextOutline, IoLogOutOutline } from "react-icons/io5";
-// IoSettingsOutline 아이콘 제거됨
+
+interface Notification {
+  id: number;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 export default function Header() {
-  const { isLoggedIn, logout, theme, toggleTheme, notifications } = useAuth();
+  const { isLoggedIn, logout } = useAuth();
+  const supabase = createClientComponentClient();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const router = useRouter();
 
-  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!isLoggedIn) {
+        setNotifications([]);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!error && data) {
+        setNotifications(data);
+      }
+    };
+
+    fetchNotifications();
+  }, [isLoggedIn, supabase]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.is_read).length, [notifications]);
 
   const handleProtectedLink = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
     e.preventDefault();
@@ -86,7 +119,7 @@ export default function Header() {
                           notifications.map(notif => (
                             <div key={notif.id} className="p-3 border-b dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
                               <p>{notif.message}</p>
-                              <p className="text-xs text-gray-500 mt-1">{notif.createdAt.toLocaleString()}</p>
+                              <p className="text-xs text-gray-500 mt-1">{new Date(notif.created_at).toLocaleString()}</p>
                             </div>
                           ))
                         ) : (

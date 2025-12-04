@@ -10,8 +10,7 @@ export async function GET(request: Request) {
 
     if (!postId) return NextResponse.json([], { status: 400 });
 
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient({ cookies });
 
     const { data, error } = await supabase
       .from('comments')
@@ -32,18 +31,14 @@ export async function GET(request: Request) {
   }
 }
 
-// 2. 댓글 작성 (POST) - ★ 여기가 문제였을 확률 높음
+// 2. 댓글 작성 (POST)
 export async function POST(request: Request) {
   try {
-    // 1. Body 파싱
     const body = await request.json();
     const { post_id, content } = body;
 
-    // 2. 쿠키 & Supabase 설정 (Next.js 15 필수: await)
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient({ cookies });
 
-    // 3. 유저 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
@@ -51,27 +46,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
     }
 
-    // 4. DB Insert
     const { data, error } = await supabase
       .from('comments')
       .insert({
         content: content,
-        post_id: Number(post_id), // 숫자로 변환하여 안전하게 전달
+        post_id: Number(post_id),
         user_id: user.id,
       })
       .select()
       .single();
 
     if (error) {
-      console.error("DB Insert Error:", error); // ★ VS Code 터미널에 에러 이유가 뜹니다
+      console.error("DB Insert Error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json(data);
 
-  } catch (error: any) {
-    console.error("Critical Server Error:", error);
-    // JSON 형식이 깨지지 않도록 안전하게 반환
+  } catch {
+    console.error("Critical Server Error");
     return NextResponse.json({ error: '알 수 없는 서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }

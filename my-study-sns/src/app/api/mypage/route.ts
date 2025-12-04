@@ -3,16 +3,13 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 
 // 1. 내 정보 조회 (프로필 + 게시글 목록 + 총 점수)
-export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+export async function GET() {
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
-    // 1. 로그인 체크
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
 
-    // 2. 프로필 가져오기
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
@@ -21,7 +18,6 @@ export async function GET(request: Request) {
 
     if (profileError) throw profileError;
 
-    // 3. 내가 쓴 게시글 가져오기 (최신순)
     const { data: posts, error: postsError } = await supabase
       .from("posts")
       .select("*")
@@ -30,13 +26,10 @@ export async function GET(request: Request) {
 
     if (postsError) throw postsError;
 
-    // 4. 총 유용도 점수 계산 (내가 쓴 글들에 달린 모든 리뷰 점수 합산)
-    // (1) 내 글의 ID 목록 추출
-    const postIds = posts.map((p) => p.id);
+    const postIds = posts.map((p: { id: number }) => p.id);
     let totalScore = 0;
 
     if (postIds.length > 0) {
-      // (2) 내 글에 달린 리뷰들 조회
       const { data: reviews, error: reviewsError } = await supabase
         .from("reviews")
         .select("score")
@@ -44,8 +37,7 @@ export async function GET(request: Request) {
 
       if (reviewsError) throw reviewsError;
 
-      // (3) 점수 합산
-      totalScore = reviews.reduce((acc, curr) => acc + curr.score, 0);
+      totalScore = reviews.reduce((acc: number, curr: { score: number }) => acc + curr.score, 0);
     }
 
     return NextResponse.json({
@@ -55,16 +47,16 @@ export async function GET(request: Request) {
       postCount: posts.length
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("MyPage GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "알 수 없는 오류";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 // 2. 프로필 수정 (PUT)
 export async function PUT(request: Request) {
-  const cookieStore = await cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -72,7 +64,6 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
 
-    // 업데이트할 데이터 (DB 컬럼명과 일치해야 함)
     const updates = {
       username: body.username,
       school_name: body.schoolName,
@@ -92,8 +83,9 @@ export async function PUT(request: Request) {
 
     return NextResponse.json(data);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("MyPage PUT Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "알 수 없는 오류";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

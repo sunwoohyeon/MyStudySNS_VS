@@ -1,28 +1,32 @@
-"use client";
+"use client"; // ★ 클라이언트 컴포넌트 필수
 
-import { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-const ThemeContext = createContext<{
+interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
-}>({ theme: "light", toggleTheme: () => {} });
+}
 
-export const useTheme = () => useContext(ThemeContext);
+// Context 생성
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
 
-  // 1. 초기 로딩 시 로컬스토리지 or 시스템 설정 확인
+  // 1. 초기 로드 시 로컬 스토리지나 시스템 설정을 확인
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as Theme;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.classList.toggle("dark", savedTheme === "dark");
+    const storedTheme = localStorage.getItem("theme") as Theme | null;
+    
+    if (storedTheme) {
+      setTheme(storedTheme);
+      if (storedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      }
     } else {
-      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (systemPrefersDark) {
+      // 저장된 설정이 없으면 시스템 설정 따르기 (선택사항)
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
         setTheme("dark");
         document.documentElement.classList.add("dark");
       }
@@ -31,15 +35,14 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
 
   // 2. 테마 변경 함수
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    
-    // Tailwind의 'dark' 클래스를 html 태그에 껐다 켰다 함
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
+    if (theme === "light") {
+      setTheme("dark");
+      localStorage.setItem("theme", "dark");
+      document.documentElement.classList.add("dark"); // <html> 태그에 class="dark" 추가
     } else {
-      document.documentElement.classList.remove("dark");
+      setTheme("light");
+      localStorage.setItem("theme", "light");
+      document.documentElement.classList.remove("dark"); // class="dark" 제거
     }
   };
 
@@ -49,3 +52,12 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     </ThemeContext.Provider>
   );
 }
+
+// 3. 다른 컴포넌트에서 쉽게 쓰기 위한 커스텀 훅
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
+};

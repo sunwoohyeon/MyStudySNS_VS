@@ -3,12 +3,11 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 
 export async function GET(
-    request: Request,
-    { params }: { params: { id: string } }
+    _request: Request,
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    const userId = params.id;
+    const { id: userId } = await params;
+    const supabase = createRouteHandlerClient({ cookies });
 
     try {
         // 1. 프로필 가져오기
@@ -30,7 +29,7 @@ export async function GET(
         if (postsError) throw postsError;
 
         // 3. 총 유용도 점수 계산
-        const postIds = posts.map((p) => p.id);
+        const postIds = posts.map((p: { id: number }) => p.id);
         let totalScore = 0;
 
         if (postIds.length > 0) {
@@ -41,7 +40,7 @@ export async function GET(
 
             if (reviewsError) throw reviewsError;
 
-            totalScore = reviews.reduce((acc, curr) => acc + curr.score, 0);
+            totalScore = reviews.reduce((acc: number, curr: { score: number }) => acc + curr.score, 0);
         }
 
         return NextResponse.json({
@@ -50,8 +49,9 @@ export async function GET(
             totalScore,
             postCount: posts.length,
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Profile GET Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : '알 수 없는 오류';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
