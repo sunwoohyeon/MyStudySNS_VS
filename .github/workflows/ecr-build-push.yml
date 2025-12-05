@@ -70,3 +70,36 @@ jobs:
 
           # ECR에 이미지 푸시
           docker push $IMAGE
+
+  # EC2 자동 배포
+  deploy:
+    needs: build_and_push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # ECR 로그인
+            aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 887559014388.dkr.ecr.ap-northeast-2.amazonaws.com
+
+            # 기존 컨테이너 중지 및 삭제
+            docker stop mystudysns-prod || true
+            docker rm mystudysns-prod || true
+
+            # 새 이미지 다운로드
+            docker pull 887559014388.dkr.ecr.ap-northeast-2.amazonaws.com/my-study-sns-repo:${{ github.sha }}
+
+            # 새 컨테이너 실행
+            docker run -d \
+              --name mystudysns-prod \
+              -p 3000:3000 \
+              --restart unless-stopped \
+              887559014388.dkr.ecr.ap-northeast-2.amazonaws.com/my-study-sns-repo:${{ github.sha }}
+
+            # 불필요한 이미지 정리
+            docker image prune -f
