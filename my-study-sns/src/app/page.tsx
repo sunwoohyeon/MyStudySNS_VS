@@ -1,4 +1,4 @@
-// src/app/page.tsx (최종 수정)
+// src/app/page.tsx
 "use client";
 
 import { useState } from 'react';
@@ -11,32 +11,31 @@ export default function IndexPage() {
   const [selectedTopic, setSelectedTopic] = useState("전체"); 
   
   return (
-    // ★ 수정된 부분: max-w-7xl 제거, px-48 (12rem/192px) 적용
-    //               Tailwind 기본 설정에서 px-96 (24rem)이 최대입니다.
-    //               px-48을 사용하여 좌우 여백을 극대화합니다.
-    <div className="w-full px-48 py-8">
-      
-      {/* ★ 수정된 부분: 그리드 레이아웃 비율을 4:8로 변경합니다. */}
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 xl:px-20 py-8">
+
+      {/* 그리드 레이아웃: 1열 → (md 이상) 12열 */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
 
-        {/* --- 좌측 영역: 시간표 (4/12 너비) --- */}
-        {/* ★ 수정: md:col-span-6 -> md:col-span-4로 변경 */}
+        {/* 좌측 영역: 시간표 (4/12) */}
         <div className="md:col-span-4 space-y-8">
-            <ScheduleWidget />
+          <ScheduleWidget />
         </div>
 
-        {/* --- 우측 영역: 지식 카드, 필터, 게시글 (8/12 너비) --- */}
-        {/* ★ 수정: md:col-span-6 -> md:col-span-8로 변경 */}
+        {/* 우측 영역: 지식카드 + 필터 + 타임라인 (8/12) */}
         <div className="md:col-span-8 space-y-8">
-            
-            {/* 1. 추천 지식 카드 */}
-            <KnowledgeCards /> 
-            
-            {/* 2. 주제 필터링 버튼 목록 */}
-            <TopicFilter activeTopic={selectedTopic} setActiveTopic={setSelectedTopic} /> 
+          
+          {/* 추천 지식 카드 */}
+          <KnowledgeCards />
 
-            {/* 3. 메인 타임라인 */}
-            <Timeline selectedTopic={selectedTopic} /> 
+          {/* 주제 필터 */}
+          <TopicFilter 
+            activeTopic={selectedTopic}
+            setActiveTopic={setSelectedTopic}
+          />
+
+          {/* 메인 타임라인 */}
+          <Timeline selectedTopic={selectedTopic} />
+
         </div>
       </div>
     </div>
