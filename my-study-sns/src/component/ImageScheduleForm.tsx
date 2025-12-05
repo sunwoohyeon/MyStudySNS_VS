@@ -107,7 +107,7 @@ const ImageScheduleForm: React.FC<ImageScheduleFormProps> = ({ onClose, onSucces
                                 <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, GIF 파일</p>
                                 {fileName && (
                                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-2">
-                                        선택된 파일: **{fileName}**
+                                        선택된 파일: <strong>{fileName}</strong>
                                     </p>
                                 )}
                             </div>

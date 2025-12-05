@@ -43,7 +43,8 @@ export default function AuthGuard() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [pathname, router, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, router]);
 
   return null;
 }
