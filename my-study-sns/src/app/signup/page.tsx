@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +8,8 @@ import { TERMS_OF_SERVICE, PRIVACY_POLICY, MARKETING_CONSENT } from "@/constants
 
 export default function SignupPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabaseRef = useRef(createClientComponentClient());
+  const supabase = supabaseRef.current;
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +51,8 @@ export default function SignupPage() {
       }
     };
     checkSession();
-  }, [router, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   // --- 약관 동의 상태 ---
   const [terms, setTerms] = useState({

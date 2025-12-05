@@ -30,7 +30,9 @@ interface Notification {
 
 export default function SimpleHeader() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  // supabase 클라이언트를 useRef로 한 번만 생성
+  const supabaseRef = useRef(createClientComponentClient());
+  const supabase = supabaseRef.current;
 
   const [user, setUser] = useState<any>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -79,7 +81,8 @@ export default function SimpleHeader() {
     );
 
     return () => listener.subscription.unsubscribe();
-  }, [supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ------------------------- 검색창 포커스 -------------------------
   useEffect(() => {

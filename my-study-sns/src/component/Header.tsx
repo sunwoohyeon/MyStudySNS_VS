@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Link from 'next/link';
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import React from 'react';
 import { HiMenu, HiSearch, HiOutlinePencilAlt } from "react-icons/hi";
 import { IoClose, IoNotifications, IoPersonCircleOutline, IoDocumentTextOutline, IoLogOutOutline } from "react-icons/io5";
@@ -19,7 +19,8 @@ interface Notification {
 
 export default function Header() {
   const { isLoggedIn, logout } = useAuth();
-  const supabase = createClientComponentClient();
+  const supabaseRef = useRef(createClientComponentClient());
+  const supabase = supabaseRef.current;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -49,7 +50,8 @@ export default function Header() {
     };
 
     fetchNotifications();
-  }, [isLoggedIn, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
 
   const unreadCount = useMemo(
     () => notifications.filter(n => !n.is_read).length,

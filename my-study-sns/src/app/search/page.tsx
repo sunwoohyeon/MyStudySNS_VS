@@ -3,7 +3,7 @@
 
 import MainLayout from "@/component/MainLayout";
 import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { BsCheckCircleFill, BsHandThumbsUpFill } from "react-icons/bs";
@@ -35,7 +35,8 @@ const formatRelativeTime = (dateStr: string): string => {
 function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
-  const supabase = createClientComponentClient();
+  const supabaseRef = useRef(createClientComponentClient());
+  const supabase = supabaseRef.current;
 
   const [posts, setPosts] = useState<SearchPost[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +79,8 @@ function SearchContent() {
     };
 
     fetchSearchResults();
-  }, [query, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   return (
     <div className="max-w-4xl mx-auto w-full py-8 px-4">

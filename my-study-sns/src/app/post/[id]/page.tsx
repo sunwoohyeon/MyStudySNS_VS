@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import MainLayout from "@/component/MainLayout";
@@ -33,7 +33,8 @@ interface PostDetail {
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabaseRef = useRef(createClientComponentClient());
+  const supabase = supabaseRef.current;
 
   const [post, setPost] = useState<PostDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +75,8 @@ export default function PostDetailPage() {
     };
 
     fetchPost();
-  }, [params.id, router, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, router]);
 
   // 삭제 기능
   const handleDelete = async () => {
