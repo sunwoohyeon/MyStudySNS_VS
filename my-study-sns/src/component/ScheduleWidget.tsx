@@ -5,9 +5,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import ScheduleForm from './ScheduleForm';
 import WeeklyScheduleGrid from './WeeklyScheduleGrid';
+import ImageScheduleForm from './ImageScheduleForm'; // 👈 새 컴포넌트 import
 import { FaPlus, FaTrashAlt, FaChevronDown } from 'react-icons/fa';
 
-// --- Custom Modal Component ---
+// --- Custom Modal Component (생략, 기존과 동일) ---
 interface ModalProps {
     title: string;
     message: string;
@@ -47,7 +48,7 @@ const SimpleModal: React.FC<ModalProps> = ({ title, message, onConfirm, onClose,
     );
 };
 
-// ScheduleItem 타입 정의
+// ScheduleItem 타입 정의 (기존과 동일)
 export interface ScheduleItem {
   id: number;
   user_id: string;
@@ -58,7 +59,7 @@ export interface ScheduleItem {
   location?: string;
 }
 
-// 요일 매핑 및 상수
+// 요일 매핑 및 상수 (기존과 동일)
 const DAY_MAP: { [key: number]: string } = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -70,12 +71,13 @@ export default function ScheduleWidget() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'current' | 'all'>('current');
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [isImageFormOpen, setIsImageFormOpen] = useState(false);
+    const [isImageFormOpen, setIsImageFormOpen] = useState(false); // 이미지 등록 폼 상태
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [modal, setModal] = useState<{ type: 'none' | 'message' | 'confirmDelete', title: string, message: string, onConfirm?: () => void, isError?: boolean }>({ type: 'none', message: '', title: '' });
 
-    // 1. 사용자 확인 및 데이터 Fetching
+    // 1. 사용자 확인 및 데이터 Fetching (기존과 동일)
     const fetchSchedules = useCallback(async () => {
+        // ... (기존 fetchSchedules 로직)
         setIsLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -120,12 +122,12 @@ export default function ScheduleWidget() {
         }
     }, [supabase]);
 
-    // 초기 로딩
+    // 초기 로딩 (기존과 동일)
     useEffect(() => {
         fetchSchedules();
     }, [fetchSchedules]);
 
-    // 2. 삭제 함수
+    // 2. 삭제 함수 (기존과 동일)
     const handleDeleteSchedule = async (item: ScheduleItem) => {
         try {
             const { error } = await supabase
@@ -153,7 +155,7 @@ export default function ScheduleWidget() {
         }
     };
 
-    // 3. ScheduleItemRow 컴포넌트
+    // 3. ScheduleItemRow 컴포넌트 (기존과 동일)
     const ScheduleItemRow: React.FC<{ item: ScheduleItem }> = ({ item }) => {
         const handleDeleteModal = () => {
             setModal({
@@ -181,7 +183,7 @@ export default function ScheduleWidget() {
         );
     };
 
-    // 4. 필터링 함수
+    // 4. 필터링 함수 (기존과 동일)
     const getFilteredSchedules = () => {
         if (viewMode === 'all') return schedules;
 
@@ -199,7 +201,7 @@ export default function ScheduleWidget() {
     const filteredSchedules = getFilteredSchedules();
     const isCurrentView = viewMode === 'current';
 
-    // 비로그인 상태 UI
+    // 비로그인 상태 UI (기존과 동일)
     if (!isLoading && !currentUserId) {
         return (
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm p-8 text-center">
@@ -212,7 +214,7 @@ export default function ScheduleWidget() {
 
     return (
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors duration-300">
-            {/* 헤더: 제목 및 버튼 */}
+            {/* 헤더: 제목 및 버튼 (Dropdown 내용 수정) */}
             <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="font-bold text-gray-800 dark:text-gray-100 flex-shrink-0">
                     {isCurrentView ? '🔔 오늘의 수업 시간표' : '📚 전체 시간표'}
@@ -244,7 +246,7 @@ export default function ScheduleWidget() {
                                     시간표 직접 등록
                                 </button>
                                 <button
-                                    onClick={() => { setIsImageFormOpen(true); setDropdownOpen(false); }}
+                                    onClick={() => { setIsImageFormOpen(true); setDropdownOpen(false); }} // 👈 이미지 폼 열기
                                     className="w-full text-left px-4 py-2 text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 >
                                     이미지 파일 등록
@@ -255,7 +257,7 @@ export default function ScheduleWidget() {
                 </div>
             </div>
 
-            {/* 시간표 목록/그리드 */}
+            {/* 시간표 목록/그리드 (기존과 동일) */}
             {isLoading ? (
                 <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex justify-center gap-1">
@@ -286,7 +288,7 @@ export default function ScheduleWidget() {
                 </div>
             )}
 
-            {/* 시간표 직접 등록 모달 */}
+            {/* 시간표 직접 등록 모달 (기존과 동일) */}
             {isFormOpen && (
                 <ScheduleForm
                     onClose={() => setIsFormOpen(false)}
@@ -295,16 +297,16 @@ export default function ScheduleWidget() {
                 />
             )}
 
-            {/* 이미지 등록 모달 (추후 구현) */}
+            {/* 이미지 등록 모달 (ImageScheduleForm 사용) */}
             {isImageFormOpen && (
-                <SimpleModal
-                    title="이미지 등록"
-                    message="이미지 파일을 통한 시간표 등록 기능은 추후 지원 예정입니다."
+                <ImageScheduleForm // 👈 이미지 등록 컴포넌트 사용
                     onClose={() => setIsImageFormOpen(false)}
+                    onSuccess={fetchSchedules}
+                    setGlobalModal={setModal}
                 />
             )}
 
-            {/* Modal Rendering */}
+            {/* Modal Rendering (기존과 동일) */}
             {modal.type !== 'none' && (
                 <SimpleModal
                     title={modal.title}
