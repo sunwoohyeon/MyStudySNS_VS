@@ -10,15 +10,11 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 📌 타입 정의
 ------------------------------------------------------------------------ */
 
-// post_hashtags → hashtags(name) 관계 타입
-interface PostHashtagRow {
+interface HashtagRow {
   post_id: number;
-  hashtags: {
-    name: string;
-  }[] | null;   // ✅ 배열로 변경
+  hashtags: { name: string }[] | { name: string } | null;
 }
 
-// 메인 Post 타입
 interface Post {
   id: number;
   title: string;
@@ -35,11 +31,14 @@ interface Post {
   hashtags?: string[];
 }
 
+type SortMode = "latest" | "useful";
+type SortKey = "latest" | "freeBoard" | "qaBoard" | "studyNote";
+
 /* ------------------------------------------------------------------------
-📌 상대시간 포맷 함수
+📌 상대 시간 포맷
 ------------------------------------------------------------------------ */
 
-const formatRelativeTime = (date: string | Date) => {
+const formatRelativeTime = (date: string | Date): string => {
   const now = new Date();
   const d = new Date(date);
   const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
@@ -57,137 +56,146 @@ const formatRelativeTime = (date: string | Date) => {
 };
 
 /* ------------------------------------------------------------------------
-📌 PostItem — 개별 게시글 UI + 수정/삭제 포함
+📌 PostItem — 개별 게시글 카드
 ------------------------------------------------------------------------ */
 
-const PostItem: React.FC<{ post: Post; currentUserId?: string }> = ({
-  post,
-  currentUserId,
-}) => {
+interface PostItemProps {
+  post: Post;
+  currentUserId?: string;
+}
+
+const PostItem: React.FC<PostItemProps> = ({ post, currentUserId }) => {
   const router = useRouter();
   const isMyPost = currentUserId === post.user_id;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
-    await fetch(`/api/posts/${post.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: editContent }),
-    });
-    setIsEditing(false);
-    router.refresh();
+    if (!editContent.trim()) return alert("내용을 입력해주세요.");
+
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/posts/${post.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent }),
+      });
+
+      if (!res.ok) throw new Error();
+      setIsEditing(false);
+      router.refresh();
+    } catch {
+      alert("게시글 수정 중 오류가 발생했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDelete = async () => {
-    if (!confirm("삭제하시겠습니까?")) return;
-    await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
-    router.refresh();
+    if (!confirm("정말 삭제하시겠습니까?")) return;
+
+    try {
+      const res = await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      router.refresh();
+    } catch {
+      alert("삭제에 실패했습니다.");
+    }
   };
 
-  if (post.isHidden)
+  if (post.isHidden) {
     return (
-      <li className="py-4 px-4 text-sm text-gray-400 italic dark:text-gray-500">
-        사용자 신고로 숨김 처리된 게시물입니다.
+      <li className="py-3 px-4 text-gray-400 italic dark:text-gray-500">
+        신고로 인해 숨긴 게시물입니다.
       </li>
     );
+  }
 
   return (
-    <li className="py-4 px-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition rounded-md">
-      <div className="flex items-start justify-between gap-4">
-        {/* ---------------- LEFT ---------------- */}
+    <li className="py-3 px-4 border-b last:border-0 bg-white dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex justify-between gap-4">
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <>
+            <div>
               <textarea
+                className="w-full p-2 border rounded bg-white dark:bg-gray-700 dark:text-white"
+                rows={3}
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                rows={3}
-                className="w-full p-3 bg-gray-100 dark:bg-gray-700 text-sm rounded-md focus:ring-2 focus:ring-blue-500"
               />
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-1">
                 <button
-                  className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
                   onClick={handleSave}
+                  className="bg-blue-500 text-white text-xs px-2 py-1 rounded"
                 >
                   저장
                 </button>
                 <button
-                  className="px-2 py-1 bg-gray-300 dark:bg-gray-600 text-xs rounded"
                   onClick={() => setIsEditing(false)}
+                  className="bg-gray-300 text-xs px-2 py-1 rounded"
                 >
                   취소
                 </button>
               </div>
-            </>
+            </div>
           ) : (
             <Link
               href={`/post/${post.id}`}
-              className="block text-[15px] sm:text-base font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 hover:underline"
+              className="font-medium text-gray-800 dark:text-gray-200 block truncate hover:underline"
             >
               {post.title}
             </Link>
           )}
 
-          {/* 메타 정보 */}
-          <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-2">
-            <span className="font-semibold text-gray-700 dark:text-gray-200">
-              {post.author}
-            </span>
-            <span className="opacity-70">({post.major})</span>
-            <span className="mx-1">·</span>
+          <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-1 mt-1">
+            <span className="font-semibold">{post.author}</span>
+            <span>({post.major})</span>
+            <span>·</span>
             <span>{formatRelativeTime(post.createdAt)}</span>
 
-            {/* 해시태그 */}
-            {post.hashtags?.length ? (
+            {post.hashtags && post.hashtags.length > 0 && (
               <div className="flex gap-1 ml-2 flex-wrap">
                 {post.hashtags.map((tag) => (
                   <span
                     key={tag}
-                    className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full text-[10px]"
+                    className="px-1.5 py-0.5 text-[10px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-500"
                   >
                     #{tag}
                   </span>
                 ))}
               </div>
-            ) : null}
+            )}
 
-            {/* 수정 / 삭제 */}
             {isMyPost && !isEditing && (
-              <div className="flex gap-2 ml-2">
+              <span className="ml-2 flex gap-1">
                 <button
                   className="text-blue-500 hover:underline"
                   onClick={() => setIsEditing(true)}
                 >
                   수정
                 </button>
+                <span>|</span>
                 <button
                   className="text-red-500 hover:underline"
                   onClick={handleDelete}
                 >
                   삭제
                 </button>
-              </div>
+              </span>
             )}
           </div>
         </div>
 
-        {/* ---------------- RIGHT ---------------- */}
-        <div className="hidden sm:flex flex-col items-end gap-2">
-          {post.isSolved && (
-            <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs rounded-full">
-              해결됨
-            </span>
-          )}
-
-          <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs rounded-full">
+        {/* PC Only */}
+        <div className="hidden sm:flex items-center gap-3">
+          <span className="bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded">
             {post.tag}
           </span>
-
-          <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-            <BsHandThumbsUpFill className="w-4 h-4 text-blue-500" />
-            <span className="font-bold">{post.usefulScore.toFixed(1)}</span>
+          <div className="flex items-center gap-1">
+            <BsHandThumbsUpFill className="text-blue-500" />
+            <span>{post.usefulScore.toFixed(1)}</span>
           </div>
         </div>
       </div>
@@ -196,63 +204,74 @@ const PostItem: React.FC<{ post: Post; currentUserId?: string }> = ({
 };
 
 /* ------------------------------------------------------------------------
-📌 BoardSection — 섹션 UI 묶음 (정렬 + 목록 + 더보기)
+📌 BoardSection
 ------------------------------------------------------------------------ */
 
-const BoardSection: React.FC<{
+const BoardSection = ({
+  title,
+  posts,
+  sortBy,
+  onSortChange,
+  currentUserId,
+  limit,
+}: {
   title: string;
   posts: Post[];
-  sortBy: "latest" | "useful";
-  onSortChange: (v: "latest" | "useful") => void;
+  sortBy: SortMode;
+  onSortChange: (mode: SortMode) => void;
   currentUserId?: string;
   limit?: number;
-}> = ({ title, posts, sortBy, onSortChange, currentUserId, limit }) => {
-  const list = limit ? posts.slice(0, limit) : posts;
-  const link = title === "최신 게시글" ? "/board/all" : `/board/${title}`;
+}) => {
+  const boardLink =
+    title === "최신 게시글" ? "/board/all" : `/board/${encodeURIComponent(title)}`;
+
+  const displayPosts = limit ? posts.slice(0, limit) : posts;
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-      <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-        <h2 className="font-bold text-gray-900 dark:text-gray-100">{title}</h2>
+    <div className="border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 shadow-sm">
+      <div className="flex justify-between p-4 border-b dark:border-gray-700">
+        <div className="flex gap-4">
+          <h2 className="font-bold text-gray-800 dark:text-gray-100">{title}</h2>
 
-        <div className="flex items-center gap-2 text-xs">
-          <button
-            className={
-              sortBy === "latest"
-                ? "font-bold text-blue-500"
-                : "text-gray-500 dark:text-gray-400"
-            }
-            onClick={() => onSortChange("latest")}
-          >
-            최신순
-          </button>
-          <span className="text-gray-300">|</span>
-          <button
-            className={
-              sortBy === "useful"
-                ? "font-bold text-blue-500"
-                : "text-gray-500 dark:text-gray-400"
-            }
-            onClick={() => onSortChange("useful")}
-          >
-            유용순
-          </button>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] sm:text-xs">
+            <button
+              onClick={() => onSortChange("latest")}
+              className={`
+                    px-2 py-1 rounded-md transition
+                    ${sortBy === "latest"
+                      ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/20"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}
+                  `}            
+              >
+              최신순
+            </button>
+            <span className="text-gray-300 dark:text-gray-600 select-none">|</span>
+            <button
+              onClick={() => onSortChange("useful")}
+              className={`
+                    px-2 py-1 rounded-md transition
+                    ${sortBy === "useful"
+                      ? "text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/20"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}
+                  `}
+            >
+              유용순
+            </button>
+          </div>
         </div>
 
-        <Link href={link} className="text-xs text-gray-500 hover:underline">
+        <Link href={boardLink} className="text-xs text-gray-500 hover:underline">
           + 더보기
         </Link>
       </div>
 
-      <ul>
-        {list.length ? (
-          list.map((p) => (
-            <PostItem key={p.id} post={p} currentUserId={currentUserId} />
+      <ul className="divide-y dark:divide-gray-700">
+        {displayPosts.length > 0 ? (
+          displayPosts.map((post) => (
+            <PostItem key={post.id} post={post} currentUserId={currentUserId} />
           ))
         ) : (
-          <li className="py-8 text-center text-gray-400 dark:text-gray-500">
-            게시글이 없습니다.
-          </li>
+          <li className="py-8 text-center text-gray-400">게시글이 없습니다.</li>
         )}
       </ul>
     </div>
@@ -260,7 +279,7 @@ const BoardSection: React.FC<{
 };
 
 /* ------------------------------------------------------------------------
-📌 Timeline — 무한스크롤 + 정렬 + 모든 게시판 출력
+📌 Timeline — 무한스크롤 + 최신 게시글 규칙
 ------------------------------------------------------------------------ */
 
 export default function Timeline({ selectedTopic }: { selectedTopic: string }) {
@@ -268,238 +287,274 @@ export default function Timeline({ selectedTopic }: { selectedTopic: string }) {
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>();
+
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const loader = useRef<HTMLDivElement | null>(null);
+  const loader = useRef<HTMLDivElement>(null);
 
   const PAGE_SIZE = 10;
 
-  // 정렬 상태
-  const [sortOrders, setSortOrders] = useState({
+  const [sortOrders, setSortOrders] = useState<Record<SortKey, SortMode>>({
     latest: "latest",
     freeBoard: "latest",
     qaBoard: "latest",
     studyNote: "latest",
-  } as const);
+  });
 
-  const changeSort = (
-    key: keyof typeof sortOrders,
-    value: "latest" | "useful"
-  ) => setSortOrders((prev) => ({ ...prev, [key]: value }));
+  const handleSortChange = (key: SortKey, mode: SortMode) => {
+    setSortOrders((prev) => ({ ...prev, [key]: mode }));
+  };
 
-  /* ------------------ 유저 정보 로드 ------------------ */
+  /* ---------------- user info ---------------- */
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setCurrentUserId(data.user?.id);
     });
   }, []);
 
-  /* ---------------- 태그 바뀌면 리스트 초기화 ---------------- */
+  /* ---------------- topic change → reset ---------------- */
   useEffect(() => {
-    setPage(0);
     setPosts([]);
+    setPage(0);
     setHasMore(true);
   }, [selectedTopic]);
 
-  /* ------------------ 게시글 불러오기 ------------------ */
+  /* ---------------- fetch posts ---------------- */
   const fetchPosts = useCallback(async () => {
     if (isLoading || !hasMore) return;
 
     setIsLoading(true);
 
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
+    try {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
-    let query = supabase
-      .from("posts")
-      .select(`*, profiles(username, major)`, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      let query = supabase
+        .from("posts")
+        .select(`*, profiles(username, major)`, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-    // 태그 필터링
-    if (selectedTopic !== "전체") {
-      const { data: tagData } = await supabase
-        .from("hashtags")
-        .select("id")
-        .eq("name", selectedTopic)
-        .single();
+      // 태그 필터
+      if (selectedTopic !== "전체") {
+        const { data: tagInfo } = await supabase
+          .from("hashtags")
+          .select("id")
+          .eq("name", selectedTopic)
+          .single();
 
-      if (!tagData) {
-        setHasMore(false);
-        setIsLoading(false);
-        return;
+        if (!tagInfo) {
+          setHasMore(false);
+          setIsLoading(false);
+          return;
+        }
+
+        const { data: tagged } = await supabase
+          .from("post_hashtags")
+          .select("post_id")
+          .eq("hashtag_id", tagInfo.id);
+
+        const ids = tagged?.map((x) => x.post_id) ?? [];
+
+        if (ids.length === 0) {
+          setHasMore(false);
+          setIsLoading(false);
+          return;
+        }
+
+        query = query.in("id", ids);
       }
 
-      const { data: tagPosts } = await supabase
-        .from("post_hashtags")
-        .select("post_id")
-        .eq("hashtag_id", tagData.id);
+      const { data, count } = await query;
 
-      const ids = tagPosts?.map((p) => p.post_id) || [];
+      if (data?.length) {
+        const ids = data.map((p: any) => p.id);
 
-      if (ids.length === 0) {
-        setHasMore(false);
-        setIsLoading(false);
-        return;
+        /* 리뷰 점수 */
+        const scoreMap: Record<number, number> = {};
+        const { data: reviews } = await supabase
+          .from("reviews")
+          .select("post_id, score")
+          .in("post_id", ids);
+
+        reviews?.forEach((r) => {
+          scoreMap[r.post_id] = (scoreMap[r.post_id] || 0) + r.score;
+        });
+
+        /* 해시태그 */
+        const hashtagMap: Record<number, string[]> = {};
+        const { data: hashtagData } = await supabase
+          .from("post_hashtags")
+          .select(
+            `
+            post_id,
+            hashtags (name)
+          `
+          )
+          .in("post_id", ids);
+
+        (hashtagData as HashtagRow[])?.forEach((h) => {
+        if (!hashtagMap[h.post_id]) hashtagMap[h.post_id] = [];
+
+        const tags = h.hashtags;
+
+        // 배열 형태일 때
+        if (Array.isArray(tags)) {
+          tags.forEach((t) => t?.name && hashtagMap[h.post_id].push(t.name));
+        }
+        // 단일 객체일 때
+        else if (tags && typeof tags === "object" && "name" in tags) {
+          hashtagMap[h.post_id].push(tags.name);
+        }
+        });
+
+
+        const newPosts: Post[] = data.map((p: any) => ({
+          id: p.id,
+          title: p.title || "제목 없음",
+          content: p.content,
+          author: p.profiles?.username || "익명",
+          createdAt: p.created_at,
+          user_id: p.user_id,
+          major: p.profiles?.major,
+          tag: p.tag,
+          usefulScore: scoreMap[p.id] || 0,
+          isSolved: false,
+          isHidden: false,
+          board: p.board,
+          hashtags: hashtagMap[p.id] ?? [],
+        }));
+
+        setPosts((prev) => [
+          ...prev,
+          ...newPosts.filter((x) => !prev.some((p) => p.id === x.id)),
+        ]);
+
+        if (count !== null && to >= count - 1) {
+          setHasMore(false);
+        }
       }
-
-      query = query.in("id", ids);
-    }
-
-    const { data, count } = await query;
-
-    if (data) {
-      const postIds = data.map((p) => p.id);
-
-      // 리뷰 점수 가져오기
-      const { data: reviews } = await supabase
-        .from("reviews")
-        .select("post_id, score")
-        .in("post_id", postIds);
-
-      const scoreMap: Record<number, number> = {};
-      reviews?.forEach((r) => {
-        scoreMap[r.post_id] = (scoreMap[r.post_id] || 0) + r.score;
-      });
-
-      // 해시태그 가져오기
-      const { data: tagRowsData } = await supabase
-  .from("post_hashtags")
-  .select("post_id, hashtags(name)")
-  .in("post_id", postIds);
-
-const tagRows = (tagRowsData ?? []) as PostHashtagRow[];
-const tagMap: Record<number, string[]> = {};
-
-tagRows.forEach((row) => {
-  if (!tagMap[row.post_id]) tagMap[row.post_id] = [];
-
-  row.hashtags?.forEach((h) => {
-    if (h?.name) {
-      tagMap[row.post_id].push(h.name);
-    }
-  });
-});
-
-
-      const newPosts: Post[] = data.map((p) => ({
-        id: p.id,
-        title: p.title,
-        content: p.content,
-        author: p.profiles?.username,
-        major: p.profiles?.major,
-        createdAt: p.created_at,
-        user_id: p.user_id,
-        tag: p.tag,
-        board: p.board,
-        isSolved: false,
-        isHidden: false,
-        usefulScore: scoreMap[p.id] || 0,
-        hashtags: tagMap[p.id] || [],
-      }));
-
-      setPosts((prev) => [...prev, ...newPosts]);
-
-      if (data.length < PAGE_SIZE || (count && to >= count)) {
-        setHasMore(false);
-      }
+    } catch (err) {
+      console.error(err);
     }
 
     setIsLoading(false);
   }, [page, selectedTopic, isLoading, hasMore]);
 
-  /* -------- page가 바뀌면 fetch -------- */
   useEffect(() => {
     fetchPosts();
-  }, [page]);
+  }, [fetchPosts]);
 
-  /* -------- Intersection Observer (무한스크롤) -------- */
+  /* ---------------- infinite scroll ---------------- */
   useEffect(() => {
-    const ob = new IntersectionObserver(
+    if (!loader.current) return;
+
+    const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
-          setPage((p) => p + 1);
+        if (entries[0].isIntersecting && !isLoading && hasMore) {
+          setPage((prev) => prev + 1);
         }
       },
-      { rootMargin: "32px" }
+      { rootMargin: "20px", threshold: 0 }
     );
 
-    if (loader.current) ob.observe(loader.current);
-    return () => ob.disconnect();
-  }, [hasMore, isLoading]);
+    observer.observe(loader.current);
 
-  /* -------- 정렬 함수 -------- */
-  const sort = (arr: Post[], mode: "latest" | "useful") =>
+    return () => observer.disconnect();
+  }, [isLoading, hasMore]);
+
+  /* ---------------- 정렬 + 최신게시글 규칙 ---------------- */
+
+  const sortPosts = (arr: Post[], mode: SortMode) =>
     [...arr].sort((a, b) =>
       mode === "useful"
         ? b.usefulScore - a.usefulScore
         : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-  /* ====================================================================
-  📌 최종 UI 렌더링
-  ==================================================================== */
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  let latestPosts = sortPosts(posts, sortOrders.latest);
+
+  if (latestPosts.length >= 10) {
+    latestPosts = latestPosts.slice(0, 10);
+  } else {
+    latestPosts = latestPosts.filter(
+      (p) => new Date(p.createdAt) >= oneWeekAgo
+    );
+  }
+
+  const freeBoardPosts = sortPosts(
+    posts.filter((p) => p.board === "자유게시판"),
+    sortOrders.freeBoard
+  );
+
+  const qaPosts = sortPosts(
+    posts.filter((p) => p.board === "질문/답변"),
+    sortOrders.qaBoard
+  );
+
+  const studyNotePosts = sortPosts(
+    posts.filter((p) => p.board === "스터디노트"),
+    sortOrders.studyNote
+  );
+
+  /* ---------------- render ---------------- */
 
   return (
     <div className="p-2 sm:p-0 pb-10">
       <div className="space-y-8">
-        {/* 최신 게시글 */}
         <BoardSection
           title="최신 게시글"
-          posts={sort(posts, sortOrders.latest)}
+          posts={latestPosts}
           sortBy={sortOrders.latest}
-          onSortChange={(v) => changeSort("latest", v)}
+          onSortChange={(m) => handleSortChange("latest", m)}
           currentUserId={currentUserId}
         />
 
-        {/* 자유게시판 */}
         <BoardSection
           title="자유게시판"
-          posts={sort(
-            posts.filter((p) => !p.board || p.board === "자유게시판"),
-            sortOrders.freeBoard
-          )}
+          posts={freeBoardPosts}
           sortBy={sortOrders.freeBoard}
-          onSortChange={(v) => changeSort("freeBoard", v)}
+          onSortChange={(m) => handleSortChange("freeBoard", m)}
           currentUserId={currentUserId}
           limit={5}
         />
 
-        {/* 질문/답변 */}
         <BoardSection
           title="질문/답변"
-          posts={sort(
-            posts.filter((p) => p.board === "질문/답변"),
-            sortOrders.qaBoard
-          )}
+          posts={qaPosts}
           sortBy={sortOrders.qaBoard}
-          onSortChange={(v) => changeSort("qaBoard", v)}
+          onSortChange={(m) => handleSortChange("qaBoard", m)}
           currentUserId={currentUserId}
           limit={5}
         />
 
-        {/* 스터디 노트 */}
         <BoardSection
           title="스터디 노트"
-          posts={sort(
-            posts.filter((p) => p.board === "스터디노트"),
-            sortOrders.studyNote
-          )}
+          posts={studyNotePosts}
           sortBy={sortOrders.studyNote}
-          onSortChange={(v) => changeSort("studyNote", v)}
+          onSortChange={(m) => handleSortChange("studyNote", m)}
           currentUserId={currentUserId}
           limit={5}
         />
       </div>
 
-      {/* infinite scroll trigger */}
-      <div ref={loader} className="h-12 flex justify-center items-center mt-6">
+      {/* 무한 스크롤 로더 */}
+      <div ref={loader} className="h-10 flex justify-center items-center mt-4">
         {isLoading && (
-          <div className="flex gap-2 text-gray-400 animate-pulse">
-            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+          <div className="flex gap-2 text-gray-500">
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+            <div
+              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              style={{ animationDelay: "0.1s" }}
+            />
+            <div
+              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              style={{ animationDelay: "0.2s" }}
+            />
           </div>
         )}
       </div>

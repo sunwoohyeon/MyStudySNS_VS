@@ -18,7 +18,7 @@ export default function SocialLoginSection() {
       
       // 1. 기본 옵션 설정
       let authOptions: any = {
-        redirectTo: 'https://mathilda-otiose-my.ngrok-free.dev/auth/callback',
+        redirectTo: 'https://mystudysns.shop/auth/callback',
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
