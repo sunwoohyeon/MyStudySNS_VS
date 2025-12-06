@@ -3,8 +3,10 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { FiImage, FiX, FiArrowLeft } from "react-icons/fi";
+import { FiImage, FiArrowLeft } from "react-icons/fi";
+import { FaRobot } from "react-icons/fa";
 import HashtagInput from "@/component/HashtagInput";
+import StudyNoteUploadForm from "@/component/StudyNoteUploadForm";
 
 export default function WritePage() {
   const router = useRouter();
@@ -20,6 +22,7 @@ export default function WritePage() {
     tag: "일반",
   });
   const [hashtags, setHashtags] = useState<string[]>([]);
+  const [showAINoteModal, setShowAINoteModal] = useState(false);
 
   // 입력 핸들러
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -192,8 +195,17 @@ export default function WritePage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading}
               className="text-gray-500 hover:text-blue-600 p-2 rounded-lg hover:bg-gray-100 transition dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-800 disabled:opacity-50"
+              title="이미지 삽입"
             >
               <FiImage size={28} />
+            </button>
+            <button
+              onClick={() => setShowAINoteModal(true)}
+              disabled={isLoading}
+              className="text-gray-500 hover:text-purple-600 p-2 rounded-lg hover:bg-gray-100 transition dark:text-gray-400 dark:hover:text-purple-400 dark:hover:bg-gray-800 disabled:opacity-50"
+              title="AI 노트 추출"
+            >
+              <FaRobot size={26} />
             </button>
             <input
               type="file"
@@ -203,11 +215,18 @@ export default function WritePage() {
               className="hidden"
             />
             <span className="text-xs text-gray-400">
-              {isLoading ? "이미지 업로드 중..." : "사진 버튼을 누르면 본문에 이미지가 삽입됩니다."}
+              {isLoading ? "이미지 업로드 중..." : "사진 버튼: 이미지 삽입 | AI 버튼: 노트 사진에서 내용 추출"}
             </span>
           </div>
         </div>
       </div>
+
+      {/* AI 노트 추출 모달 */}
+      {showAINoteModal && (
+        <StudyNoteUploadForm
+          onClose={() => setShowAINoteModal(false)}
+        />
+      )}
     </div>
   );
 }

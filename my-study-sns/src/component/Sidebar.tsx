@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { FiX, FiEdit3, FiHome, FiUser, FiSettings } from "react-icons/fi";
+import { FaRobot } from "react-icons/fa";
+import StudyNoteUploadForm from "./StudyNoteUploadForm";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,6 +13,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose, user }: SidebarProps) {
+  const [showAINoteModal, setShowAINoteModal] = useState(false);
+
   return (
     <>
       <div
@@ -44,6 +49,17 @@ export default function Sidebar({ isOpen, onClose, user }: SidebarProps) {
             게시글 작성하기
           </Link>
 
+          <button
+            onClick={() => {
+              setShowAINoteModal(true);
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition font-bold"
+          >
+            <FaRobot size={20} />
+            AI 스터디 노트 작성
+          </button>
+
           <div className="border-t my-2 border-gray-200 dark:border-gray-800"></div>
 
           {/* [변경점] 일반 메뉴 텍스트 및 호버 색상 */}
@@ -73,6 +89,13 @@ export default function Sidebar({ isOpen, onClose, user }: SidebarProps) {
           </div>
         )}
       </div>
+
+      {/* AI 스터디 노트 작성 모달 */}
+      {showAINoteModal && (
+        <StudyNoteUploadForm
+          onClose={() => setShowAINoteModal(false)}
+        />
+      )}
     </>
   );
 }
