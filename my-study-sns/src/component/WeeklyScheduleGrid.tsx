@@ -2,19 +2,21 @@
 "use client";
 
 import React from 'react';
+import { FaTrashAlt } from 'react-icons/fa';
 import { ScheduleItem } from './ScheduleWidget';
 
 interface WeeklyScheduleGridProps {
     schedules: ScheduleItem[];
+    onDeleteSchedule?: (item: ScheduleItem) => void;
 }
 
 // 토, 일요일을 제외한 주중 요일
 const WEEKDAYS = ['월', '화', '수', '목', '금']; 
 const START_HOUR = 9; // 시작 시간 (9시)
 const END_HOUR = 20; // 종료 시간 (20시)
-const HOUR_HEIGHT = 75; // 1시간당 픽셀 높이
+const HOUR_HEIGHT = 80; // 1시간당 픽셀 높이
 
-const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules }) => {
+const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules, onDeleteSchedule }) => {
     // 9, 10, ..., 20
     const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
@@ -97,20 +99,48 @@ const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules }) =>
                                         return (
                                             <div
                                                 key={s.id}
-                                                // ********** [수정] 이벤트 스타일 (색상 및 위치 계산 적용) **********
-                                                className="absolute left-0 right-0 rounded-md p-1.5 text-xs text-white shadow-md cursor-pointer overflow-hidden"
-                                                // 배경색을 어두운 계열에 어울리는 색상으로 변경 (이미지의 연두색과 유사한 녹색)
-                                                style={{ 
-                                                    ...eventStyle, 
-                                                    backgroundColor: '#10B981', // Emerald 600
+                                                className="absolute left-0 right-0 rounded-md p-1.5 text-xs text-white shadow-md group"
+                                                style={{
+                                                    ...eventStyle,
+                                                    backgroundColor: '#10B981',
                                                     zIndex: zIndex,
-                                                    margin: '0 2px', // 양옆에 마진 추가
+                                                    margin: '0 2px',
+                                                    overflow: 'hidden',
                                                 }}
+                                                title={`${s.title}${s.location ? ` (${s.location})` : ''}\n${s.start_time} ~ ${s.end_time}`}
                                             >
-                                                <span className="font-semibold block truncate">{s.title}</span>
-                                                <span className="text-white text-opacity-80 block text-[10px]">
+                                                {/* 삭제 버튼 */}
+                                                {onDeleteSchedule && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onDeleteSchedule(s);
+                                                        }}
+                                                        className="absolute top-1 right-1 p-1 rounded bg-red-500 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        aria-label="삭제"
+                                                    >
+                                                        <FaTrashAlt className="w-2.5 h-2.5" />
+                                                    </button>
+                                                )}
+                                                <span className="font-semibold block leading-tight" style={{
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden',
+                                                    wordBreak: 'break-all',
+                                                    fontSize: '11px',
+                                                }}>{s.title}</span>
+                                                <span className="text-white text-opacity-90 block text-[10px] mt-0.5">
                                                     {s.start_time.slice(0, 5)} ~ {s.end_time.slice(0, 5)}
                                                 </span>
+                                                {s.location && (
+                                                    <span className="text-white text-opacity-70 block text-[9px] leading-tight" style={{
+                                                        display: '-webkit-box',
+                                                        WebkitLineClamp: 1,
+                                                        WebkitBoxOrient: 'vertical',
+                                                        overflow: 'hidden',
+                                                    }}>{s.location}</span>
+                                                )}
                                             </div>
                                         );
                                     })}

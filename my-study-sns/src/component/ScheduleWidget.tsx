@@ -127,7 +127,7 @@ export default function ScheduleWidget() {
         fetchSchedules();
     }, [fetchSchedules]);
 
-    // 2. 삭제 함수 (기존과 동일)
+    // 2. 개별 삭제 함수
     const handleDeleteSchedule = async (item: ScheduleItem) => {
         try {
             const { error } = await supabase
@@ -153,6 +153,55 @@ export default function ScheduleWidget() {
                 isError: true
             });
         }
+    };
+
+    // 전체 삭제 함수
+    const handleDeleteAllSchedules = async () => {
+        if (!currentUserId) return;
+
+        try {
+            const { error } = await supabase
+                .from('schedules')
+                .delete()
+                .eq('user_id', currentUserId);
+
+            if (error) throw error;
+
+            setSchedules([]);
+            setModal({
+                type: 'message',
+                title: '삭제 완료',
+                message: '모든 시간표가 삭제되었습니다.'
+            });
+        } catch (e) {
+            console.error('전체 삭제 에러:', e);
+            setModal({
+                type: 'message',
+                title: '오류',
+                message: '시간표 삭제 중 오류가 발생했습니다.',
+                isError: true
+            });
+        }
+    };
+
+    // 전체 삭제 확인 모달
+    const confirmDeleteAll = () => {
+        if (schedules.length === 0) {
+            setModal({
+                type: 'message',
+                title: '알림',
+                message: '삭제할 시간표가 없습니다.'
+            });
+            return;
+        }
+
+        setModal({
+            type: 'confirmDelete',
+            title: '전체 삭제 확인',
+            message: `등록된 시간표 ${schedules.length}개를 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
+            onConfirm: handleDeleteAllSchedules,
+            isError: true
+        });
     };
 
     // 3. ScheduleItemRow 컴포넌트 (기존과 동일)
@@ -246,10 +295,17 @@ export default function ScheduleWidget() {
                                     시간표 직접 등록
                                 </button>
                                 <button
-                                    onClick={() => { setIsImageFormOpen(true); setDropdownOpen(false); }} // 👈 이미지 폼 열기
+                                    onClick={() => { setIsImageFormOpen(true); setDropdownOpen(false); }}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 >
                                     이미지 파일 등록
+                                </button>
+                                <hr className="border-gray-200 dark:border-gray-600" />
+                                <button
+                                    onClick={() => { confirmDeleteAll(); setDropdownOpen(false); }}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    전체 삭제
                                 </button>
                             </div>
                         )}
@@ -284,7 +340,17 @@ export default function ScheduleWidget() {
                 )
             ) : (
                 <div className="p-0">
-                    <WeeklyScheduleGrid schedules={schedules} />
+                    <WeeklyScheduleGrid
+                        schedules={schedules}
+                        onDeleteSchedule={(item) => {
+                            setModal({
+                                type: 'confirmDelete',
+                                title: '삭제 확인',
+                                message: `[${item.title}] 시간표를 삭제하시겠습니까?`,
+                                onConfirm: () => handleDeleteSchedule(item),
+                            });
+                        }}
+                    />
                 </div>
             )}
 
