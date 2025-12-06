@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import SimpleHeader from "@/component/SimpleHeader";
