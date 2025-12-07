@@ -95,9 +95,14 @@ export default function Header() {
           <div className="flex-grow text-center">
             <Link
               href="/"
-              className="text-lg sm:text-xl font-bold text-gray-800 dark:text-gray-100"
+              className="pointer-events-auto flex flex-col items-center leading-tight"
             >
-              My Study SNS
+              <span className="bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent text-[22px] font-bold tracking-tight">
+                My Study SNS
+              </span>
+              <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 -mt-[2px]">
+                Your Smart Learning Space
+              </span>
             </Link>
           </div>
 

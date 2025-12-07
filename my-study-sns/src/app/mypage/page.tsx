@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import MainLayout from "@/component/MainLayout";
 import Link from "next/link";
-import { FiUser, FiEdit2, FiSave, FiAward, FiFileText } from "react-icons/fi";
+import { FiEdit2, FiSave, FiAward, FiFileText, FiBook } from "react-icons/fi";
+import KnowledgeCardModal from "@/component/KnowledgeCardModal";
 
 interface Profile {
   username: string;
@@ -23,6 +24,17 @@ interface Post {
   tag: string;
 }
 
+interface KnowledgeCard {
+  id: number;
+  post_id: number;
+  user_id: string;
+  title: string;
+  summary: string;
+  category: string;
+  keywords: string[];
+  created_at: string;
+}
+
 export default function MyPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +43,9 @@ export default function MyPage() {
   // 데이터 상태
   const [profile, setProfile] = useState<Profile | null>(null);
   const [myPosts, setMyPosts] = useState<Post[]>([]);
-  const [stats, setStats] = useState({ totalScore: 0, postCount: 0 });
+  const [myCards, setMyCards] = useState<KnowledgeCard[]>([]);
+  const [selectedCard, setSelectedCard] = useState<KnowledgeCard | null>(null);
+  const [stats, setStats] = useState({ totalScore: 0, averageScore: 0, postCount: 0, cardCount: 0 });
 
   // 수정 폼 상태
   const [editForm, setEditForm] = useState({
@@ -55,7 +69,8 @@ export default function MyPage() {
         const data = await res.json();
         setProfile(data.profile);
         setMyPosts(data.posts);
-        setStats({ totalScore: data.totalScore, postCount: data.postCount });
+        setMyCards(data.knowledgeCards || []);
+        setStats({ totalScore: data.totalScore, averageScore: data.averageScore || 0, postCount: data.postCount, cardCount: data.cardCount || 0 });
         
         // 수정 폼 초기값 설정
         setEditForm({
@@ -110,7 +125,7 @@ export default function MyPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto w-full py-8 px-4">
+      <div className="max-w-5xl mx-auto w-full py-2 px-4">
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">마이페이지</h1>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -213,13 +228,17 @@ export default function MyPage() {
               <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <FiAward className="text-yellow-500" /> 내 활동 지표
               </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg text-center">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalScore}</div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-center">
+                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.totalScore}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">총 획득 점수</div>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">
-                  <div className="text-2xl font-bold text-gray-800 dark:text-gray-200">{stats.postCount}</div>
+                <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-lg text-center">
+                  <div className="text-xl font-bold text-green-600 dark:text-green-400">{stats.averageScore.toFixed(1)}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">평균 점수</div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-center">
+                  <div className="text-xl font-bold text-gray-800 dark:text-gray-200">{stats.postCount}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">작성한 글</div>
                 </div>
               </div>
@@ -229,12 +248,66 @@ export default function MyPage() {
             </div>
           </div>
 
-          {/* --- 우측: 내 게시글 목록 --- */}
-          <div className="md:col-span-2">
+          {/* --- 우측: 내 게시글 + 지식카드 목록 --- */}
+          <div className="md:col-span-2 space-y-6">
+            {/* 내 지식카드 섹션 */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                <FiBook className="text-purple-500" />
+                <h3 className="font-bold text-gray-900 dark:text-white">내 지식카드</h3>
+                <span className="text-sm text-gray-400">({stats.cardCount})</span>
+              </div>
+
+              {myCards.length > 0 ? (
+                <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {myCards.map((card) => (
+                    <li
+                      key={card.id}
+                      onClick={() => setSelectedCard(card)}
+                      className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition cursor-pointer group"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-purple-100 text-purple-600 text-xs px-2 py-0.5 rounded dark:bg-purple-900/30 dark:text-purple-400">
+                              {card.category}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(card.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <h4 className="text-base font-medium text-gray-900 dark:text-gray-100 group-hover:text-purple-600 transition truncate">
+                            {card.title}
+                          </h4>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {card.keywords?.slice(0, 3).map((keyword, idx) => (
+                              <span key={idx} className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">
+                                #{keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-gray-300 dark:text-gray-600 group-hover:translate-x-1 transition-transform ml-2">
+                          &rarr;
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="p-10 text-center text-gray-400">
+                  아직 생성한 지식카드가 없습니다. <br />
+                  <span className="text-sm">게시글에서 &quot;지식카드 만들기&quot; 버튼을 눌러보세요!</span>
+                </div>
+              )}
+            </div>
+
+            {/* 내 게시글 목록 */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
                 <FiFileText className="text-blue-500" />
                 <h3 className="font-bold text-gray-900 dark:text-white">내가 작성한 글</h3>
+                <span className="text-sm text-gray-400">({stats.postCount})</span>
               </div>
 
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -275,6 +348,19 @@ export default function MyPage() {
 
         </div>
       </div>
+
+      {/* 지식카드 상세 모달 */}
+      {selectedCard && (
+        <KnowledgeCardModal
+          card={selectedCard}
+          onClose={() => setSelectedCard(null)}
+          onDelete={(cardId: number) => {
+            setMyCards(myCards.filter(c => c.id !== cardId));
+            setStats(prev => ({ ...prev, cardCount: prev.cardCount - 1 }));
+            setSelectedCard(null);
+          }}
+        />
+      )}
     </MainLayout>
   );
 }

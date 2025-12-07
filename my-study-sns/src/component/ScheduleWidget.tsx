@@ -1,12 +1,12 @@
-// src/component/ScheduleWidget.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import ScheduleForm from './ScheduleForm';
 import WeeklyScheduleGrid from './WeeklyScheduleGrid';
-import ImageScheduleForm from './ImageScheduleForm'; // 👈 새 컴포넌트 import
-import { FaPlus, FaTrashAlt, FaChevronDown } from 'react-icons/fa';
+import ImageScheduleForm from './ImageScheduleForm';
+import ScheduleEditModal from './ScheduleEditModal';
+import { FaPlus, FaTrashAlt, FaChevronDown, FaEdit } from 'react-icons/fa';
 
 // --- Custom Modal Component (생략, 기존과 동일) ---
 interface ModalProps {
@@ -71,13 +71,13 @@ export default function ScheduleWidget() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'current' | 'all'>('current');
     const [isFormOpen, setIsFormOpen] = useState(false);
-    const [isImageFormOpen, setIsImageFormOpen] = useState(false); // 이미지 등록 폼 상태
+    const [isImageFormOpen, setIsImageFormOpen] = useState(false);
+    const [editingSchedule, setEditingSchedule] = useState<ScheduleItem | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [modal, setModal] = useState<{ type: 'none' | 'message' | 'confirmDelete', title: string, message: string, onConfirm?: () => void, isError?: boolean }>({ type: 'none', message: '', title: '' });
 
     // 1. 사용자 확인 및 데이터 Fetching (기존과 동일)
     const fetchSchedules = useCallback(async () => {
-        // ... (기존 fetchSchedules 로직)
         setIsLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -91,7 +91,6 @@ export default function ScheduleWidget() {
 
             setCurrentUserId(user.id);
 
-            // DB에서 시간표 조회
             const { data, error } = await supabase
                 .from('schedules')
                 .select('*')
@@ -100,7 +99,6 @@ export default function ScheduleWidget() {
 
             if (error) throw error;
 
-            // 요일 순서로 정렬
             const sortedData = (data || []).sort((a, b) => {
                 const dayA = DAYS.indexOf(a.day_of_week);
                 const dayB = DAYS.indexOf(b.day_of_week);
@@ -109,7 +107,7 @@ export default function ScheduleWidget() {
             });
 
             setSchedules(sortedData);
-        } catch (e: unknown) {
+        } catch (e) {
             console.error('시간표 로딩 에러:', e);
             setModal({
                 type: 'message',
@@ -122,12 +120,11 @@ export default function ScheduleWidget() {
         }
     }, [supabase]);
 
-    // 초기 로딩 (기존과 동일)
     useEffect(() => {
         fetchSchedules();
     }, [fetchSchedules]);
 
-    // 2. 개별 삭제 함수
+    // 개별 삭제
     const handleDeleteSchedule = async (item: ScheduleItem) => {
         try {
             const { error } = await supabase
@@ -137,7 +134,6 @@ export default function ScheduleWidget() {
 
             if (error) throw error;
 
-            // 로컬 상태 업데이트
             setSchedules(prev => prev.filter(s => s.id !== item.id));
             setModal({
                 type: 'message',
@@ -145,7 +141,6 @@ export default function ScheduleWidget() {
                 message: '시간표가 삭제되었습니다.'
             });
         } catch (e) {
-            console.error('삭제 에러:', e);
             setModal({
                 type: 'message',
                 title: '오류',
@@ -155,7 +150,7 @@ export default function ScheduleWidget() {
         }
     };
 
-    // 전체 삭제 함수
+    // 전체 삭제
     const handleDeleteAllSchedules = async () => {
         if (!currentUserId) return;
 
@@ -174,7 +169,6 @@ export default function ScheduleWidget() {
                 message: '모든 시간표가 삭제되었습니다.'
             });
         } catch (e) {
-            console.error('전체 삭제 에러:', e);
             setModal({
                 type: 'message',
                 title: '오류',
@@ -184,7 +178,19 @@ export default function ScheduleWidget() {
         }
     };
 
-    // 전체 삭제 확인 모달
+    const handleEditSchedule = (item: ScheduleItem) => {
+        setEditingSchedule(item);
+    };
+
+    const handleSaveEdit = (updated: ScheduleItem) => {
+        setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
+        setModal({
+            type: 'message',
+            title: '수정 완료',
+            message: '시간표가 수정되었습니다.'
+        });
+    };
+
     const confirmDeleteAll = () => {
         if (schedules.length === 0) {
             setModal({
@@ -204,7 +210,7 @@ export default function ScheduleWidget() {
         });
     };
 
-    // 3. ScheduleItemRow 컴포넌트 (기존과 동일)
+    // 3. ScheduleItemRow (기존 유지)
     const ScheduleItemRow: React.FC<{ item: ScheduleItem }> = ({ item }) => {
         const handleDeleteModal = () => {
             setModal({
@@ -225,14 +231,19 @@ export default function ScheduleWidget() {
                     <p className="text-base font-bold truncate text-gray-800 dark:text-gray-200">{item.title}</p>
                     {item.location && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.location}</p>}
                 </div>
-                <button onClick={handleDeleteModal} className="text-red-500 hover:text-red-700 p-2 rounded-full transition-colors flex-shrink-0" aria-label="삭제">
-                    <FaTrashAlt className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => handleEditSchedule(item)} className="text-blue-500 hover:text-blue-700 p-2 rounded-full transition-colors" aria-label="수정">
+                        <FaEdit className="w-4 h-4" />
+                    </button>
+                    <button onClick={handleDeleteModal} className="text-red-500 hover:text-red-700 p-2 rounded-full transition-colors" aria-label="삭제">
+                        <FaTrashAlt className="w-4 h-4" />
+                    </button>
+                </div>
             </li>
         );
     };
 
-    // 4. 필터링 함수 (기존과 동일)
+    // 필터링 함수 (기존과 동일)
     const getFilteredSchedules = () => {
         if (viewMode === 'all') return schedules;
 
@@ -250,7 +261,7 @@ export default function ScheduleWidget() {
     const filteredSchedules = getFilteredSchedules();
     const isCurrentView = viewMode === 'current';
 
-    // 비로그인 상태 UI (기존과 동일)
+    // 비로그인 상태 UI (기존 유지)
     if (!isLoading && !currentUserId) {
         return (
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm p-8 text-center">
@@ -263,8 +274,9 @@ export default function ScheduleWidget() {
 
     return (
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors duration-300">
-            {/* 헤더: 제목 및 버튼 (Dropdown 내용 수정) */}
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+
+            {/* 제목 + 버튼 헤더 (p-4 → p-3) */}
+            <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="font-bold text-gray-800 dark:text-gray-100 flex-shrink-0">
                     {isCurrentView ? '🔔 오늘의 수업 시간표' : '📚 전체 시간표'}
                 </h2>
@@ -313,9 +325,9 @@ export default function ScheduleWidget() {
                 </div>
             </div>
 
-            {/* 시간표 목록/그리드 (기존과 동일) */}
+            {/* 로딩 상태 (p-8 → p-5) */}
             {isLoading ? (
-                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <div className="p-5 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex justify-center gap-1">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -323,7 +335,9 @@ export default function ScheduleWidget() {
                     </div>
                     <p className="mt-2">시간표를 불러오는 중...</p>
                 </div>
+
             ) : isCurrentView ? (
+
                 filteredSchedules.length > 0 ? (
                     <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                         {filteredSchedules.map(item => (
@@ -331,13 +345,15 @@ export default function ScheduleWidget() {
                         ))}
                     </ul>
                 ) : (
-                    <div className="py-8 px-4 text-sm text-gray-400 italic text-center dark:text-gray-500">
+                    // 오늘 수업 없음 (py-8 px-4 → py-5 px-3)
+                    <div className="py-5 px-3 text-sm text-gray-400 italic text-center dark:text-gray-500">
                         {schedules.length === 0
                             ? '등록된 시간표가 없습니다. + 버튼을 눌러 추가해보세요!'
                             : '오늘은 남은 수업이 없습니다.'
                         }
                     </div>
                 )
+
             ) : (
                 <div className="p-0">
                     <WeeklyScheduleGrid
@@ -350,11 +366,12 @@ export default function ScheduleWidget() {
                                 onConfirm: () => handleDeleteSchedule(item),
                             });
                         }}
+                        onEditSchedule={handleEditSchedule}
                     />
                 </div>
             )}
 
-            {/* 시간표 직접 등록 모달 (기존과 동일) */}
+            {/* 시간표 등록 모달 */}
             {isFormOpen && (
                 <ScheduleForm
                     onClose={() => setIsFormOpen(false)}
@@ -363,16 +380,25 @@ export default function ScheduleWidget() {
                 />
             )}
 
-            {/* 이미지 등록 모달 (ImageScheduleForm 사용) */}
+            {/* 이미지 등록 모달 */}
             {isImageFormOpen && (
-                <ImageScheduleForm // 👈 이미지 등록 컴포넌트 사용
+                <ImageScheduleForm
                     onClose={() => setIsImageFormOpen(false)}
                     onSuccess={fetchSchedules}
                     setGlobalModal={setModal}
                 />
             )}
 
-            {/* Modal Rendering (기존과 동일) */}
+            {/* 시간표 수정 모달 */}
+            {editingSchedule && (
+                <ScheduleEditModal
+                    schedule={editingSchedule}
+                    onClose={() => setEditingSchedule(null)}
+                    onSave={handleSaveEdit}
+                />
+            )}
+
+            {/* Modal Rendering */}
             {modal.type !== 'none' && (
                 <SimpleModal
                     title={modal.title}

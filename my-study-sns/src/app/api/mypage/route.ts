@@ -28,6 +28,8 @@ export async function GET() {
 
     const postIds = posts.map((p: { id: number }) => p.id);
     let totalScore = 0;
+    let reviewCount = 0;
+    let averageScore = 0;
 
     if (postIds.length > 0) {
       const { data: reviews, error: reviewsError } = await supabase
@@ -37,14 +39,28 @@ export async function GET() {
 
       if (reviewsError) throw reviewsError;
 
+      reviewCount = reviews?.length || 0;
       totalScore = reviews.reduce((acc: number, curr: { score: number }) => acc + curr.score, 0);
+      averageScore = reviewCount > 0 ? Number((totalScore / reviewCount).toFixed(1)) : 0;
     }
+
+    // 내 지식카드 조회
+    const { data: knowledgeCards, error: cardsError } = await supabase
+      .from("knowledge_cards")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (cardsError) throw cardsError;
 
     return NextResponse.json({
       profile,
       posts,
+      knowledgeCards: knowledgeCards || [],
       totalScore,
-      postCount: posts.length
+      averageScore,
+      postCount: posts.length,
+      cardCount: knowledgeCards?.length || 0
     });
 
   } catch (error: unknown) {

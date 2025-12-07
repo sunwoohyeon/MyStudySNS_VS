@@ -497,7 +497,7 @@ export default function Timeline({ selectedTopic }: { selectedTopic: string }) {
   );
 
   const studyNotePosts = sortPosts(
-    posts.filter((p) => p.board === "스터디노트"),
+    posts.filter((p) => p.board === "스터디 노트"),
     sortOrders.studyNote
   );
 

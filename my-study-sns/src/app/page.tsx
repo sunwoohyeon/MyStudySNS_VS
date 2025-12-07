@@ -11,7 +11,7 @@ export default function IndexPage() {
   const [selectedTopic, setSelectedTopic] = useState("전체"); 
   
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 xl:px-20 py-8">
+    <div className="w-full max-w-7xl mx-auto px-8 sm:px-6 lg:px-12 xl:px-20 pt-0 pb-2">
 
       {/* 그리드 레이아웃: 1열 → (md 이상) 12열 */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
@@ -26,12 +26,6 @@ export default function IndexPage() {
           
           {/* 추천 지식 카드 */}
           <KnowledgeCards />
-
-          {/* 주제 필터 */}
-          <TopicFilter 
-            activeTopic={selectedTopic}
-            setActiveTopic={setSelectedTopic}
-          />
 
           {/* 메인 타임라인 */}
           <Timeline selectedTopic={selectedTopic} />

@@ -2,12 +2,13 @@
 "use client";
 
 import React from 'react';
-import { FaTrashAlt } from 'react-icons/fa';
+import { FaTrashAlt, FaEdit } from 'react-icons/fa';
 import { ScheduleItem } from './ScheduleWidget';
 
 interface WeeklyScheduleGridProps {
     schedules: ScheduleItem[];
     onDeleteSchedule?: (item: ScheduleItem) => void;
+    onEditSchedule?: (item: ScheduleItem) => void;
 }
 
 // 토, 일요일을 제외한 주중 요일
@@ -16,7 +17,7 @@ const START_HOUR = 9; // 시작 시간 (9시)
 const END_HOUR = 20; // 종료 시간 (20시)
 const HOUR_HEIGHT = 80; // 1시간당 픽셀 높이
 
-const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules, onDeleteSchedule }) => {
+const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules, onDeleteSchedule, onEditSchedule }) => {
     // 9, 10, ..., 20
     const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
@@ -99,7 +100,7 @@ const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules, onDe
                                         return (
                                             <div
                                                 key={s.id}
-                                                className="absolute left-0 right-0 rounded-md p-1.5 text-xs text-white shadow-md group"
+                                                className="absolute left-0 right-0 rounded-md p-1.5 text-xs text-white shadow-md group cursor-pointer hover:brightness-110 transition-all"
                                                 style={{
                                                     ...eventStyle,
                                                     backgroundColor: '#10B981',
@@ -107,21 +108,36 @@ const WeeklyScheduleGrid: React.FC<WeeklyScheduleGridProps> = ({ schedules, onDe
                                                     margin: '0 2px',
                                                     overflow: 'hidden',
                                                 }}
-                                                title={`${s.title}${s.location ? ` (${s.location})` : ''}\n${s.start_time} ~ ${s.end_time}`}
+                                                title={`${s.title}${s.location ? ` (${s.location})` : ''}\n${s.start_time} ~ ${s.end_time}\n클릭하여 수정`}
+                                                onClick={() => onEditSchedule?.(s)}
                                             >
-                                                {/* 삭제 버튼 */}
-                                                {onDeleteSchedule && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onDeleteSchedule(s);
-                                                        }}
-                                                        className="absolute top-1 right-1 p-1 rounded bg-red-500 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        aria-label="삭제"
-                                                    >
-                                                        <FaTrashAlt className="w-2.5 h-2.5" />
-                                                    </button>
-                                                )}
+                                                {/* 수정/삭제 버튼 */}
+                                                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {onEditSchedule && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onEditSchedule(s);
+                                                            }}
+                                                            className="p-1 rounded bg-blue-500 hover:bg-blue-600 text-white"
+                                                            aria-label="수정"
+                                                        >
+                                                            <FaEdit className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    )}
+                                                    {onDeleteSchedule && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onDeleteSchedule(s);
+                                                            }}
+                                                            className="p-1 rounded bg-red-500 hover:bg-red-600 text-white"
+                                                            aria-label="삭제"
+                                                        >
+                                                            <FaTrashAlt className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                                 <span className="font-semibold block leading-tight" style={{
                                                     display: '-webkit-box',
                                                     WebkitLineClamp: 2,

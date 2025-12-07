@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from "next/link";
 import { BsHandThumbsUpFill } from "react-icons/bs";
-import TopicFilter from "@/component/TopicFilter";
+import { FiArrowLeft } from "react-icons/fi";
 
 // --- 타입 정의 (BoardPage에서 넘겨받음) ---
 // Post 타입은 프로젝트 전역에서 사용되는 타입이라고 가정합니다.
@@ -196,7 +196,16 @@ export default function PostList({ initialPosts, boardName }: { initialPosts: Po
 
     return (
         <div className="w-full max-w-5xl space-y-8">
-            <TopicFilter activeTopic={selectedTopic} setActiveTopic={setSelectedTopic} />
+            {/* 메인으로 돌아가기 버튼 */}
+            <div className="flex items-center">
+                <Link
+                    href="/"
+                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                    <FiArrowLeft className="w-5 h-5" />
+                    <span>메인으로</span>
+                </Link>
+            </div>
 
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                 <div className="flex justify-between items-center gap-4 p-6 border-b border-gray-200 dark:border-gray-700">

@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // 상수 정의
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const VALID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const REFINEMENT_CONFIDENCE_THRESHOLD = 0.9; // 이 값 이상이면 교정 생략
 
 // 노트 분석 프롬프트 생성 함수
 function createNoteAnalysisPrompt(): string {
@@ -50,25 +51,80 @@ function createNoteAnalysisPrompt(): string {
 - 해시태그: 관련 키워드 5-10개 (# 없이)
 - 과목: 감지된 과목/주제 영역
 
-## 응답 형식 (반드시 JSON만 반환)
+## 응답 형식
+반드시 아래 JSON 형식으로만 응답하세요. 다른 설명이나 텍스트 없이 JSON만 출력하세요.
+
+\`\`\`json
 {
-  "title": "학습 노트 제목",
-  "content": "## 마크다운 형식의 본문\\n\\n내용...",
-  "summary": "핵심 내용 요약 (2-3줄)",
-  "hashtags": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-  "subject": "과목/주제 영역",
+  "title": "학습 노트 제목 (15자 이내)",
+  "content": "마크다운 형식의 본문 내용",
+  "summary": "핵심 내용 요약 2-3줄",
+  "hashtags": ["키워드1", "키워드2", "키워드3"],
+  "subject": "과목명",
   "confidence": 0.95
 }
+\`\`\`
 
 ## 주의사항
 - 읽을 수 없는 부분은 [판독불가]로 표시
 - 그림/다이어그램은 [그림: 간단한 설명] 형식으로 기술
 - 원본 구조와 논리적 흐름 최대한 유지
-- 학습에 도움이 되는 명확한 포맷팅
-- 수식은 반드시 LaTeX 문법 사용
+- 수식은 반드시 LaTeX 문법 사용 ($ 또는 $$ 사용)
 - 코드는 적절한 언어 태그와 함께 코드 블록으로 감싸기
 - confidence는 전체 내용 인식 정확도 (0-1)
-- 노트가 아닌 이미지면: {"title": "", "content": "", "summary": "", "hashtags": [], "subject": "", "confidence": 0}`;
+- 노트가 아닌 이미지인 경우에도 빈 값으로 JSON 형식 유지`;
+}
+
+// 교정 프롬프트 생성 함수 (2단계)
+function createRefinePrompt(rawContent: string, subject: string, title: string): string {
+    return `당신은 ${subject} 분야의 전문가입니다.
+아래 학습 노트 내용은 OCR로 추출되어 오류가 있을 수 있습니다.
+당신의 지식을 활용하여 내용을 교정하고 보완해주세요.
+
+## 교정 규칙
+
+### 1. 전문 용어 교정
+- OCR 오류로 인한 오탈자 수정 (예: "돌턴" → "돌턴", "톰" → "톰슨", "러더포" → "러더퍼드")
+- 불완전하게 인식된 단어를 문맥에 맞게 복원
+- 학술/과학 용어의 정확성 검증 (인명, 법칙명, 공식명 등)
+
+### 2. 문맥 보완
+- 끊긴 문장을 자연스럽게 연결
+- 누락된 접속사/조사 추가
+- 논리적 흐름이 자연스럽도록 개선
+
+### 3. 내용 정확성 검증
+- 과학적/학술적 사실 오류 수정 (예: 잘못된 연도, 발견자, 공식 등)
+- 부정확한 설명 보완
+- [판독불가] 부분은 문맥과 당신의 지식으로 유추하여 채우기
+
+### 4. 반드시 유지할 사항
+- 원본의 구조(헤더, 목록, 강조) 유지
+- LaTeX 수식 문법 유지 및 검증 ($ 또는 $$ 사용)
+- 코드 블록 유지
+- **원본에 없는 완전히 새로운 내용은 추가하지 않기**
+- 원본의 학습 목적과 범위 유지
+
+## 원본 제목
+${title}
+
+## 원본 내용
+${rawContent}
+
+## 응답 형식
+반드시 아래 JSON 형식으로만 응답하세요.
+
+\`\`\`json
+{
+  "content": "교정된 마크다운 본문",
+  "corrections": [
+    {"original": "원본 텍스트", "corrected": "수정된 텍스트", "reason": "수정 이유"}
+  ],
+  "confidence": 0.95
+}
+\`\`\`
+
+주의: corrections 배열에는 주요 수정 사항만 최대 10개까지 포함하세요.`;
 }
 
 // 응답 데이터 검증 및 정규화
@@ -81,13 +137,59 @@ interface RawNoteData {
     confidence?: number;
 }
 
+// 교정 데이터 인터페이스
+interface CorrectionItem {
+    original: string;
+    corrected: string;
+    reason: string;
+}
+
+interface RawRefineData {
+    content?: string;
+    corrections?: CorrectionItem[];
+    confidence?: number;
+}
+
+interface RefinementInfo {
+    applied: boolean;
+    corrections: CorrectionItem[];
+    refinedConfidence: number;
+}
+
 interface ValidatedNoteData {
     title: string;
     content: string;
+    rawContent?: string;  // 원본 추출 내용 (교정 전)
     summary: string;
     hashtags: string[];
     subject: string;
     confidence: number;
+    refinement?: RefinementInfo;
+}
+
+// JSON 문자열 추출 헬퍼 함수
+function extractJsonFromResponse(responseText: string): string {
+    let jsonString = responseText;
+
+    // 방법 1: ```json ... ``` 블록에서 추출
+    const jsonBlockMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+        jsonString = jsonBlockMatch[1];
+    } else {
+        // 방법 2: ``` ... ``` 블록에서 추출
+        const codeBlockMatch = responseText.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+            jsonString = codeBlockMatch[1];
+        } else {
+            // 방법 3: { } 객체 직접 추출
+            const jsonObjectMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonObjectMatch) {
+                jsonString = jsonObjectMatch[0];
+            }
+        }
+    }
+
+    return jsonString.trim();
 }
 
 function validateAndNormalizeNoteData(data: RawNoteData): ValidatedNoteData | null {
@@ -162,28 +264,33 @@ export async function POST(request: Request) {
             },
         };
 
-        const prompt = createNoteAnalysisPrompt();
-        const result = await model.generateContent([prompt, imagePart]);
+        // ========== Phase 1: OCR 추출 ==========
+        const extractPrompt = createNoteAnalysisPrompt();
+        console.log("[Phase 1] Starting OCR extraction...");
+        const extractResult = await model.generateContent([extractPrompt, imagePart]);
 
-        // 4. 응답 파싱
-        const responseText = result.response.text();
-        const jsonString = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+        const extractResponseText = extractResult.response.text();
+        console.log("[Phase 1] Gemini Raw Response:", extractResponseText.substring(0, 500));
 
-        let aiData: RawNoteData;
+        const extractJsonString = extractJsonFromResponse(extractResponseText);
+        console.log("[Phase 1] Extracted JSON:", extractJsonString.substring(0, 300));
+
+        let rawAiData: RawNoteData;
         try {
-            aiData = JSON.parse(jsonString);
-        } catch {
-            console.error("JSON Parse Error. Response:", responseText);
+            rawAiData = JSON.parse(extractJsonString);
+        } catch (parseError) {
+            console.error("[Phase 1] JSON Parse Error:", parseError);
+            console.error("[Phase 1] Failed JSON String:", extractJsonString.substring(0, 1000));
             return NextResponse.json(
                 { success: false, error: "노트 내용을 추출할 수 없습니다. 다른 이미지를 사용해주세요.", code: 'PARSE_ERROR' },
                 { status: 500 }
             );
         }
 
-        // 5. 데이터 검증 및 정규화
-        const validatedData = validateAndNormalizeNoteData(aiData);
+        // Phase 1 데이터 검증
+        const phase1Data = validateAndNormalizeNoteData(rawAiData);
 
-        if (!validatedData || !validatedData.content) {
+        if (!phase1Data || !phase1Data.content) {
             return NextResponse.json({
                 success: true,
                 data: null,
@@ -191,10 +298,78 @@ export async function POST(request: Request) {
             });
         }
 
+        // ========== Phase 2: AI 교정 ==========
+        // 신뢰도가 높으면 교정 생략 (성능 최적화)
+        if (phase1Data.confidence >= REFINEMENT_CONFIDENCE_THRESHOLD) {
+            console.log(`[Phase 2] Skipped - confidence ${phase1Data.confidence} >= ${REFINEMENT_CONFIDENCE_THRESHOLD}`);
+            return NextResponse.json({
+                success: true,
+                data: {
+                    ...phase1Data,
+                    refinement: {
+                        applied: false,
+                        corrections: [],
+                        refinedConfidence: phase1Data.confidence
+                    }
+                },
+                message: "노트 분석이 완료되었습니다. (교정 생략: 높은 신뢰도)"
+            });
+        }
+
+        console.log("[Phase 2] Starting content refinement...");
+        let finalData: ValidatedNoteData = { ...phase1Data };
+
+        try {
+            const refinePrompt = createRefinePrompt(
+                phase1Data.content,
+                phase1Data.subject,
+                phase1Data.title
+            );
+            const refineResult = await model.generateContent(refinePrompt);
+            const refineResponseText = refineResult.response.text();
+            console.log("[Phase 2] Refine Response:", refineResponseText.substring(0, 500));
+
+            const refineJsonString = extractJsonFromResponse(refineResponseText);
+            const refineData: RawRefineData = JSON.parse(refineJsonString);
+
+            if (refineData.content) {
+                // 교정 성공: 교정된 내용으로 업데이트
+                finalData = {
+                    ...phase1Data,
+                    rawContent: phase1Data.content,  // 원본 저장
+                    content: refineData.content.trim(),  // 교정된 내용
+                    refinement: {
+                        applied: true,
+                        corrections: (refineData.corrections || []).slice(0, 10),
+                        refinedConfidence: Math.min(1, Math.max(0, refineData.confidence ?? 0.8))
+                    }
+                };
+                console.log(`[Phase 2] Refinement completed with ${finalData.refinement?.corrections.length || 0} corrections`);
+            } else {
+                // 교정 실패: 원본 사용
+                console.warn("[Phase 2] No refined content, using original");
+                finalData.refinement = {
+                    applied: false,
+                    corrections: [],
+                    refinedConfidence: phase1Data.confidence
+                };
+            }
+        } catch (refineError) {
+            // 교정 중 오류 발생: 원본 사용 (fallback)
+            console.error("[Phase 2] Refinement Error:", refineError);
+            finalData.refinement = {
+                applied: false,
+                corrections: [],
+                refinedConfidence: phase1Data.confidence
+            };
+        }
+
         return NextResponse.json({
             success: true,
-            data: validatedData,
-            message: "노트 분석이 완료되었습니다."
+            data: finalData,
+            message: finalData.refinement?.applied
+                ? "노트 분석 및 AI 교정이 완료되었습니다."
+                : "노트 분석이 완료되었습니다."
         });
 
     } catch (error: unknown) {

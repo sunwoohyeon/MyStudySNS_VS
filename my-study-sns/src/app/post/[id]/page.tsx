@@ -10,6 +10,8 @@ import CommentSection from "@/component/CommentSection";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 interface PostDetail {
   id: number;
@@ -165,9 +167,12 @@ export default function PostDetailPage() {
 
             <div className="flex justify-between items-end">
               <div className="text-sm text-gray-500 dark:text-gray-400">
-                <span className="font-medium text-gray-900 dark:text-gray-200">
+                <Link
+                  href={`/profile/${post.user_id}`}
+                  className="font-medium text-gray-900 dark:text-gray-200 hover:text-blue-600 hover:underline transition"
+                >
                   {post.profiles?.username || "알 수 없음"}
-                </span>
+                </Link>
                 <span className="mx-2">|</span>
                 <span>{new Date(post.created_at).toLocaleString()}</span>
               </div>
@@ -207,7 +212,8 @@ export default function PostDetailPage() {
           {/* 게시글 본문 (마크다운 렌더링) */}
           <div className="prose dark:prose-invert max-w-none mb-12 break-words">
             <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkBreaks]}
+              remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
               components={{
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 p: ({ node, ref, ...props }: any) => <p style={{ whiteSpace: "pre-wrap", minHeight: "1em" } as any} {...props} />

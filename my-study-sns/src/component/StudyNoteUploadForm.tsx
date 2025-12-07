@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaTimes, FaCloudUploadAlt, FaSpinner, FaExclamationTriangle, FaArrowLeft, FaEye, FaEdit, FaImage } from 'react-icons/fa';
+import { FaTimes, FaCloudUploadAlt, FaSpinner, FaExclamationTriangle, FaArrowLeft, FaEye, FaEdit, FaImage, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import HashtagInput from './HashtagInput';
 import ReactMarkdown from 'react-markdown';
@@ -12,13 +12,37 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 // 타입 정의
+interface CorrectionItem {
+    original: string;
+    corrected: string;
+    reason: string;
+}
+
+interface RefinementInfo {
+    applied: boolean;
+    corrections: CorrectionItem[];
+    refinedConfidence: number;
+}
+
 interface ExtractedNoteData {
     title: string;
     content: string;
+    rawContent?: string;
     summary: string;
     hashtags: string[];
     subject: string;
     confidence: number;
+    refinement?: RefinementInfo;
+}
+
+// 다중 이미지 아이템 인터페이스
+interface ImageItem {
+    id: string;
+    file: File;
+    preview: string;
+    status: 'pending' | 'analyzing' | 'done' | 'error';
+    result?: ExtractedNoteData;
+    error?: string;
 }
 
 interface StudyNoteUploadFormProps {
@@ -26,9 +50,10 @@ interface StudyNoteUploadFormProps {
     onSuccess?: (postId: number) => void;
 }
 
-type Step = 'upload' | 'preview' | 'saving';
+type Step = 'upload' | 'analyzing' | 'preview' | 'saving';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGES = 10; // 최대 이미지 수
 const BOARDS = ['스터디 노트', '자유게시판', '질문/답변'] as const;
 
 // 파일을 Base64로 변환하는 유틸리티 함수
@@ -49,15 +74,13 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
     const router = useRouter();
     const supabase = createClientComponentClient();
 
-    // 기본 상태
-    const [file, setFile] = useState<File | null>(null);
-    const [fileName, setFileName] = useState('');
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    // 다중 이미지 상태
+    const [images, setImages] = useState<ImageItem[]>([]);
+    const [currentAnalyzingIndex, setCurrentAnalyzingIndex] = useState<number>(-1);
     const [isLoading, setIsLoading] = useState(false);
 
     // 3단계 UX 상태
     const [step, setStep] = useState<Step>('upload');
-    const [extractedData, setExtractedData] = useState<ExtractedNoteData | null>(null);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     // 편집 가능한 필드
@@ -70,111 +93,260 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
     // 미리보기 토글
     const [showPreview, setShowPreview] = useState(false);
 
-    // 파일 선택 핸들러
+    // 통합된 교정 정보 (다중 이미지용)
+    const [mergedRefinement, setMergedRefinement] = useState<{
+        applied: boolean;
+        corrections: CorrectionItem[];
+        avgConfidence: number;
+    } | null>(null);
+
+    // 파일 선택 핸들러 (다중 이미지 지원)
     const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            const selectedFile = e.target.files[0];
-
-            if (!selectedFile.type.startsWith('image/')) {
-                setAnalysisError('이미지 파일(JPG, PNG 등)만 선택 가능합니다.');
-                return;
-            }
-
-            if (selectedFile.size > MAX_FILE_SIZE) {
-                setAnalysisError('이미지 크기는 10MB를 초과할 수 없습니다.');
-                return;
-            }
-
-            setFile(selectedFile);
-            setFileName(selectedFile.name);
+            const files = Array.from(e.target.files);
             setAnalysisError(null);
 
-            // 이미지 미리보기 생성
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                setImagePreview(event.target?.result as string);
+            // 최대 이미지 수 체크
+            const remainingSlots = MAX_IMAGES - images.length;
+            if (files.length > remainingSlots) {
+                setAnalysisError(`최대 ${MAX_IMAGES}장까지 업로드 가능합니다. (현재 ${images.length}장)`);
+                return;
+            }
+
+            // 각 파일 검증 및 추가
+            const validFiles: { file: File; preview: string }[] = [];
+            let hasError = false;
+
+            const processFiles = async () => {
+                for (const file of files) {
+                    if (!file.type.startsWith('image/')) {
+                        setAnalysisError('이미지 파일(JPG, PNG 등)만 선택 가능합니다.');
+                        hasError = true;
+                        break;
+                    }
+
+                    if (file.size > MAX_FILE_SIZE) {
+                        setAnalysisError(`${file.name}: 이미지 크기는 10MB를 초과할 수 없습니다.`);
+                        hasError = true;
+                        break;
+                    }
+
+                    // 미리보기 생성
+                    const preview = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => resolve(event.target?.result as string);
+                        reader.readAsDataURL(file);
+                    });
+
+                    validFiles.push({ file, preview });
+                }
+
+                if (!hasError && validFiles.length > 0) {
+                    const newImages: ImageItem[] = validFiles.map((vf, idx) => ({
+                        id: `${Date.now()}-${idx}`,
+                        file: vf.file,
+                        preview: vf.preview,
+                        status: 'pending' as const
+                    }));
+
+                    setImages(prev => [...prev, ...newImages]);
+                }
             };
-            reader.readAsDataURL(selectedFile);
+
+            processFiles();
         }
-    }, []);
+    }, [images.length]);
 
     // 드래그 앤 드롭 핸들러
     const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const droppedFile = e.dataTransfer.files[0];
-        if (droppedFile) {
-            if (!droppedFile.type.startsWith('image/')) {
-                setAnalysisError('이미지 파일(JPG, PNG 등)만 선택 가능합니다.');
-                return;
-            }
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
 
-            if (droppedFile.size > MAX_FILE_SIZE) {
-                setAnalysisError('이미지 크기는 10MB를 초과할 수 없습니다.');
-                return;
-            }
+        setAnalysisError(null);
 
-            setFile(droppedFile);
-            setFileName(droppedFile.name);
-            setAnalysisError(null);
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                setImagePreview(event.target?.result as string);
-            };
-            reader.readAsDataURL(droppedFile);
+        const remainingSlots = MAX_IMAGES - images.length;
+        if (files.length > remainingSlots) {
+            setAnalysisError(`최대 ${MAX_IMAGES}장까지 업로드 가능합니다. (현재 ${images.length}장)`);
+            return;
         }
-    }, []);
+
+        const processFiles = async () => {
+            const validFiles: { file: File; preview: string }[] = [];
+            let hasError = false;
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) {
+                    setAnalysisError('이미지 파일(JPG, PNG 등)만 선택 가능합니다.');
+                    hasError = true;
+                    break;
+                }
+
+                if (file.size > MAX_FILE_SIZE) {
+                    setAnalysisError(`${file.name}: 이미지 크기는 10MB를 초과할 수 없습니다.`);
+                    hasError = true;
+                    break;
+                }
+
+                const preview = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target?.result as string);
+                    reader.readAsDataURL(file);
+                });
+
+                validFiles.push({ file, preview });
+            }
+
+            if (!hasError && validFiles.length > 0) {
+                const newImages: ImageItem[] = validFiles.map((vf, idx) => ({
+                    id: `${Date.now()}-${idx}`,
+                    file: vf.file,
+                    preview: vf.preview,
+                    status: 'pending' as const
+                }));
+
+                setImages(prev => [...prev, ...newImages]);
+            }
+        };
+
+        processFiles();
+    }, [images.length]);
 
     const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
     }, []);
 
-    // 이미지 분석 시작
+    // 이미지 삭제
+    const removeImage = useCallback((id: string) => {
+        setImages(prev => prev.filter(img => img.id !== id));
+    }, []);
+
+    // 순차적 이미지 분석
     const handleAnalyze = async () => {
-        if (!file) return;
+        if (images.length === 0) return;
 
         setIsLoading(true);
         setAnalysisError(null);
+        setStep('analyzing');
 
-        try {
-            const base64 = await fileToBase64(file);
+        // 모든 이미지를 pending 상태로 초기화
+        setImages(prev => prev.map(img => ({ ...img, status: 'pending' as const })));
 
-            const response = await fetch('/api/notes/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: base64,
-                    mimeType: file.type
+        for (let i = 0; i < images.length; i++) {
+            setCurrentAnalyzingIndex(i);
+
+            // 현재 이미지를 analyzing 상태로
+            setImages(prev => prev.map((img, idx) =>
+                idx === i ? { ...img, status: 'analyzing' as const } : img
+            ));
+
+            try {
+                const base64 = await fileToBase64(images[i].file);
+
+                const response = await fetch('/api/notes/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: base64,
+                        mimeType: images[i].file.type
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+
+                if (!result.data) {
+                    throw new Error(result.message || "이미지에서 학습 노트 내용을 찾을 수 없습니다.");
+                }
+
+                // 성공: done 상태로
+                setImages(prev => prev.map((img, idx) =>
+                    idx === i ? { ...img, status: 'done' as const, result: result.data } : img
+                ));
+
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : "분석 중 오류가 발생했습니다.";
+
+                // 실패: error 상태로
+                setImages(prev => prev.map((img, idx) =>
+                    idx === i ? { ...img, status: 'error' as const, error: errorMessage } : img
+                ));
+            }
+        }
+
+        // 모든 분석 완료 후 결과 통합
+        setCurrentAnalyzingIndex(-1);
+        mergeResults();
+        setIsLoading(false);
+        setStep('preview');
+    };
+
+    // 결과 통합 로직
+    const mergeResults = () => {
+        setImages(currentImages => {
+            const successResults = currentImages
+                .filter(img => img.status === 'done' && img.result)
+                .map(img => img.result!);
+
+            if (successResults.length === 0) {
+                setAnalysisError('분석에 성공한 이미지가 없습니다. 다시 시도해주세요.');
+                return currentImages;
+            }
+
+            // 제목: 첫 번째 결과 사용
+            setEditedTitle(successResults[0].title);
+
+            // 본문: 모든 결과 통합 (여러 장일 경우 페이지 구분)
+            const mergedContent = successResults
+                .map((result, idx) => {
+                    if (successResults.length === 1) return result.content;
+                    return `## 📄 페이지 ${idx + 1}\n\n${result.content}`;
                 })
+                .join('\n\n---\n\n');
+            setEditedContent(mergedContent);
+
+            // 해시태그: 합집합 (중복 제거)
+            const allHashtags = successResults.flatMap(r => r.hashtags);
+            const uniqueHashtags = Array.from(new Set(allHashtags)).slice(0, 10);
+            setEditedHashtags(uniqueHashtags);
+
+            // 교정 정보 통합
+            const allCorrections: CorrectionItem[] = [];
+            let totalConfidence = 0;
+            let refinedCount = 0;
+
+            successResults.forEach(result => {
+                if (result.refinement?.applied) {
+                    allCorrections.push(...result.refinement.corrections);
+                    totalConfidence += result.refinement.refinedConfidence;
+                    refinedCount++;
+                } else {
+                    totalConfidence += result.confidence;
+                }
             });
 
-            const result = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.error);
+            if (allCorrections.length > 0) {
+                setMergedRefinement({
+                    applied: true,
+                    corrections: allCorrections.slice(0, 15), // 최대 15개
+                    avgConfidence: totalConfidence / successResults.length
+                });
+            } else {
+                setMergedRefinement({
+                    applied: false,
+                    corrections: [],
+                    avgConfidence: totalConfidence / successResults.length
+                });
             }
 
-            if (!result.data) {
-                setAnalysisError(result.message || "이미지에서 학습 노트 내용을 찾을 수 없습니다.");
-                return;
-            }
-
-            // 추출된 데이터 설정
-            setExtractedData(result.data);
-            setEditedTitle(result.data.title);
-            setEditedContent(result.data.content);
-            setEditedHashtags(result.data.hashtags);
-            setStep('preview');
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "분석 중 오류가 발생했습니다.";
-            setAnalysisError(errorMessage);
-        } finally {
-            setIsLoading(false);
-        }
+            return currentImages;
+        });
     };
 
     // 게시글 저장
@@ -202,28 +374,38 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
             let finalContent = editedContent;
 
             // 원본 이미지 포함 옵션이 켜져 있으면 이미지 업로드
-            if (includeOriginalImage && file) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+            if (includeOriginalImage && images.length > 0) {
+                const uploadedUrls: string[] = [];
 
-                const { error: uploadError } = await supabase.storage
-                    .from('post-images')
-                    .upload(fileName, file);
+                for (const img of images) {
+                    const fileExt = img.file.name.split('.').pop();
+                    const fileName = `${user.id}/${Date.now()}-${img.id}.${fileExt}`;
 
-                if (uploadError) {
-                    console.error('Image upload error:', uploadError);
-                    // 이미지 업로드 실패해도 게시글은 진행
-                } else {
-                    const { data: { publicUrl } } = supabase.storage
+                    const { error: uploadError } = await supabase.storage
                         .from('post-images')
-                        .getPublicUrl(fileName);
+                        .upload(fileName, img.file);
 
-                    // 이미지를 본문 맨 위에 추가
-                    finalContent = `![원본 노트 이미지](${publicUrl})\n\n---\n\n${editedContent}`;
+                    if (!uploadError) {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('post-images')
+                            .getPublicUrl(fileName);
+                        uploadedUrls.push(publicUrl);
+                    }
+                }
+
+                // 이미지를 본문 맨 위에 추가
+                if (uploadedUrls.length > 0) {
+                    const imageMarkdown = uploadedUrls
+                        .map((url, idx) => `![원본 노트 이미지 ${idx + 1}](${url})`)
+                        .join('\n\n');
+                    finalContent = `${imageMarkdown}\n\n---\n\n${editedContent}`;
                 }
             }
 
             // 게시글 생성 API 호출
+            const successResults = images.filter(img => img.status === 'done' && img.result);
+            const firstResult = successResults[0]?.result;
+
             const res = await fetch('/api/posts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -231,7 +413,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                     title: editedTitle,
                     content: finalContent,
                     board: selectedBoard,
-                    tag: extractedData?.subject || '기타',
+                    tag: firstResult?.subject || '기타',
                     imageUrl: null,
                     hashtags: editedHashtags
                 })
@@ -261,9 +443,11 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
     // 뒤로가기 (업로드 단계로)
     const handleBack = () => {
         setStep('upload');
-        setExtractedData(null);
         setAnalysisError(null);
         setShowPreview(false);
+        setMergedRefinement(null);
+        // 이미지 상태 초기화
+        setImages(prev => prev.map(img => ({ ...img, status: 'pending' as const, result: undefined, error: undefined })));
     };
 
     // 업로드 단계 렌더링
@@ -271,35 +455,52 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
         <form onSubmit={(e) => { e.preventDefault(); handleAnalyze(); }} className="p-6">
             <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    공부 노트 이미지
+                    공부 노트 이미지 <span className="text-gray-500">(최대 {MAX_IMAGES}장)</span>
                 </label>
 
-                {/* 이미지 미리보기 */}
-                {imagePreview ? (
-                    <div className="mb-4">
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
-                            <img
-                                src={imagePreview}
-                                alt="노트 미리보기"
-                                className="w-full max-h-80 object-contain bg-gray-100 dark:bg-gray-700"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setFile(null);
-                                    setFileName('');
-                                    setImagePreview(null);
-                                }}
-                                className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                            >
-                                <FaTimes className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 text-center">
-                            {fileName}
-                        </p>
+                {/* 이미지 그리드 미리보기 */}
+                {images.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-4">
+                        {images.map((img, idx) => (
+                            <div key={img.id} className="relative group">
+                                <img
+                                    src={img.preview}
+                                    alt={`노트 ${idx + 1}`}
+                                    className="w-full h-24 object-cover rounded-lg border border-gray-300 dark:border-gray-600"
+                                />
+                                <span className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                                    {idx + 1}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => removeImage(img.id)}
+                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <FaTimes className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ))}
+
+                        {/* 추가 업로드 버튼 */}
+                        {images.length < MAX_IMAGES && (
+                            <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+                                <FaCloudUploadAlt className="w-6 h-6 text-gray-400" />
+                                <span className="text-xs text-gray-500 mt-1">추가</span>
+                                <input
+                                    type="file"
+                                    className="sr-only"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleFileChange}
+                                    disabled={isLoading}
+                                />
+                            </label>
+                        )}
                     </div>
-                ) : (
+                )}
+
+                {/* 드래그 앤 드롭 영역 (이미지가 없을 때) */}
+                {images.length === 0 && (
                     <div
                         onDrop={handleDrop}
                         onDragOver={handleDragOver}
@@ -319,13 +520,14 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                                         type="file"
                                         className="sr-only"
                                         accept="image/*"
+                                        multiple
                                         onChange={handleFileChange}
                                         disabled={isLoading}
                                     />
                                 </label>
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                                PNG, JPG, GIF (최대 10MB)
+                                PNG, JPG, GIF (최대 10MB, {MAX_IMAGES}장까지)
                             </p>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                                 손글씨 노트, 교재, 프린트물 모두 지원됩니다
@@ -358,7 +560,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                 <button
                     type="submit"
                     className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 flex items-center justify-center"
-                    disabled={isLoading || !file}
+                    disabled={isLoading || images.length === 0}
                 >
                     {isLoading ? (
                         <>
@@ -366,18 +568,122 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                             AI 분석 중...
                         </>
                     ) : (
-                        'AI로 노트 분석하기'
+                        `AI로 노트 분석하기 (${images.length}장)`
                     )}
                 </button>
             </div>
         </form>
     );
 
+    // 분석 중 단계 렌더링
+    const renderAnalyzingStep = () => (
+        <div className="p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+                AI 분석 중...
+            </h3>
+            <div className="space-y-3">
+                {images.map((img, idx) => (
+                    <div key={img.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <img
+                            src={img.preview}
+                            alt={`노트 ${idx + 1}`}
+                            className="w-12 h-12 object-cover rounded"
+                        />
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                이미지 {idx + 1}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                                {img.status === 'pending' && (
+                                    <span className="text-gray-400 text-xs">대기 중</span>
+                                )}
+                                {img.status === 'analyzing' && (
+                                    <>
+                                        <FaSpinner className="animate-spin text-blue-500 w-3 h-3" />
+                                        <span className="text-blue-500 text-xs">분석 중...</span>
+                                    </>
+                                )}
+                                {img.status === 'done' && (
+                                    <>
+                                        <FaCheckCircle className="text-green-500 w-3 h-3" />
+                                        <span className="text-green-500 text-xs">완료</span>
+                                    </>
+                                )}
+                                {img.status === 'error' && (
+                                    <>
+                                        <FaTimesCircle className="text-red-500 w-3 h-3" />
+                                        <span className="text-red-500 text-xs">{img.error || '실패'}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-4 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {currentAnalyzingIndex >= 0
+                        ? `${currentAnalyzingIndex + 1} / ${images.length} 분석 중`
+                        : '분석 완료 중...'
+                    }
+                </p>
+            </div>
+        </div>
+    );
+
     // 미리보기 단계 렌더링
     const renderPreviewStep = () => (
         <div className="p-6 max-h-[70vh] overflow-y-auto">
+            {/* AI 교정 완료 알림 */}
+            {mergedRefinement?.applied && (
+                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-green-800 dark:text-green-200 text-sm flex items-center">
+                        <span className="mr-2">✨</span>
+                        AI가 내용을 교정했습니다. (평균 신뢰도: {Math.round((mergedRefinement.avgConfidence || 0) * 100)}%)
+                    </p>
+                </div>
+            )}
+
+            {/* 교정 내역 표시 (접을 수 있는 섹션) */}
+            {mergedRefinement?.applied && mergedRefinement.corrections.length > 0 && (
+                <details className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <summary className="cursor-pointer font-medium text-yellow-700 dark:text-yellow-400 flex items-center">
+                        <span className="mr-2">📝</span>
+                        AI 교정 내역 ({mergedRefinement.corrections.length}건)
+                    </summary>
+                    <ul className="mt-3 space-y-2 text-sm">
+                        {mergedRefinement.corrections.map((c, i) => (
+                            <li key={i} className="p-2 bg-white dark:bg-gray-800 rounded border border-yellow-100 dark:border-yellow-900">
+                                <div className="flex items-start gap-2">
+                                    <span className="text-red-500 line-through flex-shrink-0">{c.original}</span>
+                                    <span className="text-gray-400">→</span>
+                                    <span className="text-green-600 dark:text-green-400 flex-shrink-0">{c.corrected}</span>
+                                </div>
+                                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 italic">
+                                    {c.reason}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                </details>
+            )}
+
+            {/* 분석 결과 요약 */}
+            {images.length > 1 && (
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-blue-800 dark:text-blue-200 text-sm">
+                        📚 {images.length}장의 이미지 중 {images.filter(img => img.status === 'done').length}장 분석 성공
+                        {images.some(img => img.status === 'error') && (
+                            <span className="text-red-500 ml-2">
+                                ({images.filter(img => img.status === 'error').length}장 실패)
+                            </span>
+                        )}
+                    </p>
+                </div>
+            )}
+
             {/* 신뢰도 낮으면 경고 */}
-            {extractedData && extractedData.confidence < 0.7 && (
+            {mergedRefinement && mergedRefinement.avgConfidence < 0.7 && !mergedRefinement.applied && (
                 <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                     <p className="text-yellow-800 dark:text-yellow-200 text-sm flex items-center">
                         <FaExclamationTriangle className="mr-2 flex-shrink-0" />
@@ -489,7 +795,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                     />
                     <FaImage className="mr-2 text-gray-500 dark:text-gray-400" />
                     <span className="text-gray-700 dark:text-gray-200 text-sm">
-                        원본 이미지를 게시글에 포함
+                        원본 이미지를 게시글에 포함 ({images.length}장)
                     </span>
                 </label>
                 <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 ml-7">
@@ -539,6 +845,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                 <div className="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                         {step === 'upload' && 'AI 스터디 노트 작성'}
+                        {step === 'analyzing' && 'AI 분석 중'}
                         {step === 'preview' && '분석 결과 확인 및 편집'}
                         {step === 'saving' && '게시 중'}
                     </h3>
@@ -546,7 +853,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         aria-label="닫기"
-                        disabled={step === 'saving'}
+                        disabled={step === 'saving' || step === 'analyzing'}
                     >
                         <FaTimes className="w-6 h-6" />
                     </button>
@@ -555,6 +862,7 @@ const StudyNoteUploadForm: React.FC<StudyNoteUploadFormProps> = ({ onClose, onSu
                 {/* Body */}
                 <div className="overflow-y-auto flex-1">
                     {step === 'upload' && renderUploadStep()}
+                    {step === 'analyzing' && renderAnalyzingStep()}
                     {step === 'preview' && renderPreviewStep()}
                     {step === 'saving' && renderSavingStep()}
                 </div>

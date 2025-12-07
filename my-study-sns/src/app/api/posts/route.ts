@@ -3,7 +3,9 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = await cookies();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any });
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "로그인이 필요한 서비스입니다." }, { status: 401 });
@@ -33,13 +35,21 @@ export async function POST(request: Request) {
 
         const { data: existingTag } = await supabase
           .from("hashtags")
-          .select("id")
+          .select("id, count")
           .eq("name", tagName)
           .single();
 
         if (existingTag) {
           hashtagId = existingTag.id;
-          await supabase.rpc('increment_hashtag_count', { tag_id: hashtagId });
+          // count 직접 증가 (RPC 대신)
+          const { error: updateError } = await supabase
+            .from("hashtags")
+            .update({ count: (existingTag.count || 0) + 1 })
+            .eq("id", hashtagId);
+
+          if (updateError) {
+            console.error("Hashtag count update failed:", updateError);
+          }
         } else {
           const { data: newTag, error: tagError } = await supabase
             .from("hashtags")

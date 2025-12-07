@@ -145,15 +145,6 @@ export default function SimpleHeader() {
     return `${date.getMonth() + 1}/${date.getDate()}`;
   };
 
-  // ==========================================================================
-  //     ★★★ 반응형 헤더 최적화된 정답 구조 ★★★
-  // ==========================================================================
-  //
-  //  [왼쪽: 메뉴] [중앙: 로고 - flex 중앙] [오른쪽: 아이콘]
-  //  모바일에서도 충돌 없음
-  //  absolute 제거 → flex 기반 중앙정렬
-  // ==========================================================================
-
   return (
     <>
       <header className="sticky top-0 w-full h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-30">
@@ -174,12 +165,28 @@ export default function SimpleHeader() {
             {!isSearchOpen && (
               <Link
                 href="/"
-                className="pointer-events-auto text-xl font-extrabold text-gray-900 dark:text-white"
+                className="pointer-events-auto flex flex-col items-center leading-tight"
               >
-                My Study SNS
+                <span className="
+                  bg-gradient-to-r from-blue-500 to-indigo-600 
+                  bg-clip-text text-transparent 
+                  text-[20px] sm:text-[22px] 
+                  font-bold tracking-tight
+                ">
+                  My Study SNS
+                </span>
+                <span className="
+                  text-[10px] sm:text-[11px] 
+                  font-semibold 
+                  text-gray-500 dark:text-gray-400 
+                  -mt-[1px]
+                ">
+                  Your Smart Learning Space
+                </span>
               </Link>
             )}
           </div>
+
 
           {/* -------------------------- 오른쪽 영역 -------------------------- */}
           <div className="flex-shrink-0 flex items-center gap-2 sm:gap-4">

@@ -95,7 +95,7 @@ export default function SettingsPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="max-w-2xl mx-auto py-2 px-4">
         <h1 className="text-2xl font-bold mb-8 text-gray-900 dark:text-white">설정</h1>
 
         {/* 1. 화면 설정 */}

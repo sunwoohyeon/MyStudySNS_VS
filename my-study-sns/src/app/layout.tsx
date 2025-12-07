@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthGuard />
           <SimpleHeader />
 
-          <div className="pt-16 w-full">
+          <div className="pt-2 w-full">
             {children}
           </div>
         </ThemeProvider>

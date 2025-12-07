@@ -42,22 +42,22 @@ export async function POST(request: Request) {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const promptText = `
-        다음 내용을 바탕으로 지식 카드를 생성하기 위한 JSON 데이터를 만들어줘.
-        응답은 오직 JSON 형식이어야 해.
+다음 학습 자료를 분석하여 **공부에 도움이 되는 지식카드**를 생성해줘.
+응답은 오직 JSON 형식이어야 해.
 
-        {
-            "title": "클릭하고 싶은 흥미로운 제목 (원래 제목과 다르게, 호기심 자극)",
-            "summary": "핵심 내용 3줄 요약",
-            "category": "게시글의 기술/주제 카테고리 (예: Frontend, Backend, CS, Life 등)",
-            "keywords": ["핵심키워드1", "핵심키워드2", "핵심키워드3"]
-        }
+{
+    "title": "클릭하고 싶은 흥미로운 제목 (원래 제목과 다르게, 호기심 자극)",
+    "summary": "아래 형식으로 핵심 내용을 정리해줘 (마크다운 형식):\\n\\n## 핵심 개념\\n- 주요 개념과 정의를 bullet point로 정리\\n- 중요한 용어 설명\\n\\n## 중요 포인트\\n- 시험/면접에 나올 수 있는 핵심 내용\\n- 꼭 암기해야 할 공식, 법칙, 원리\\n- 자주 틀리는 부분이나 주의사항\\n\\n## 한줄 요약\\n전체 내용을 한 문장으로 정리\\n\\n(최소 500자 이상으로 충분히 작성)",
+    "category": "게시글의 기술/주제 카테고리 (예: Frontend, Backend, CS, Chemistry, Physics, Math, Life 등)",
+    "keywords": ["핵심키워드1", "핵심키워드2", "핵심키워드3", "핵심키워드4", "핵심키워드5"]
+}
 
-        [게시글 정보]
-        제목: ${post.title}
-        게시판: ${post.board}
-        내용:
-        ${post.content}
-        `;
+[게시글 정보]
+제목: ${post.title}
+게시판: ${post.board}
+내용:
+${post.content}
+`;
 
         let result;
 
@@ -91,6 +91,7 @@ export async function POST(request: Request) {
             .from("knowledge_cards")
             .insert({
                 post_id: postId,
+                user_id: user.id,
                 title: aiData.title,
                 summary: aiData.summary,
                 category: aiData.category,
