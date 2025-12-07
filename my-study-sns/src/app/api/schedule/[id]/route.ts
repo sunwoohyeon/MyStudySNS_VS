@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 // PATCH - 개별 시간표 항목 수정
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const supabase = createRouteHandlerClient({ cookies });
 
   try {
@@ -16,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
     }
 
-    const scheduleId = parseInt(params.id);
+    const scheduleId = parseInt(id);
     if (isNaN(scheduleId)) {
       return NextResponse.json({ error: "유효하지 않은 ID입니다." }, { status: 400 });
     }
