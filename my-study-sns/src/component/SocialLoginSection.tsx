@@ -17,8 +17,9 @@ export default function SocialLoginSection() {
       setLoadingProvider(provider);
       
       // 1. 기본 옵션 설정
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       let authOptions: any = {
-        redirectTo: 'https://mathilda-otiose-my.ngrok-free.dev/auth/callback',
+        redirectTo: `${siteUrl}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

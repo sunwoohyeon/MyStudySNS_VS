@@ -14,5 +14,6 @@ export async function GET(request: Request) {
   }
 
   // 로그인 후 메인으로 이동
-  return NextResponse.redirect(requestUrl.origin);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+  return NextResponse.redirect(siteUrl);
 }
