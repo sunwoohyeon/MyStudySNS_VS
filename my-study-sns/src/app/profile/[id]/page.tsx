@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import MainLayout from "@/component/MainLayout";
 import Link from "next/link";
-import { FiAward, FiFileText } from "react-icons/fi";
+import { FiAward, FiFileText, FiClock } from "react-icons/fi";
+import StudyCalendar from "@/component/StudyCalendar";
 
 interface Profile {
     username: string;
@@ -110,6 +111,14 @@ export default function UserProfilePage() {
                                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">작성한 글</div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* 공부 캘린더 */}
+                        <div>
+                            <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <FiClock className="text-green-500" /> 공부 기록
+                            </h3>
+                            <StudyCalendar userId={userId as string} compact />
                         </div>
                     </div>
 

@@ -6,6 +6,7 @@ import { Inter } from "next/font/google";
 import SimpleHeader from "@/component/SimpleHeader";
 import ThemeProvider from "@/component/ThemeProvider";
 import AuthGuard from "@/component/AuthGuard";
+import { StudyProvider } from "@/contexts/StudyContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -59,12 +60,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         {/* ThemeProvider는 props 없이 사용해야 TypeScript 오류 없음 */}
         <ThemeProvider>
-          <AuthGuard />
-          <SimpleHeader />
+          <StudyProvider>
+            <AuthGuard />
+            <SimpleHeader />
 
-          <div className="pt-2 w-full">
-            {children}
-          </div>
+            <div className="pt-2 w-full">
+              {children}
+            </div>
+          </StudyProvider>
         </ThemeProvider>
       </body>
     </html>

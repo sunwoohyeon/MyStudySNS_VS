@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { FiX, FiEdit3, FiHome, FiUser, FiSettings } from "react-icons/fi";
+import { FiX, FiEdit3, FiHome, FiUser, FiSettings, FiClock, FiUsers } from "react-icons/fi";
 import { FaRobot } from "react-icons/fa";
 import StudyNoteUploadForm from "./StudyNoteUploadForm";
 
@@ -59,6 +59,27 @@ export default function Sidebar({ isOpen, onClose, user }: SidebarProps) {
             <FaRobot size={20} />
             AI 스터디 노트 작성
           </button>
+
+          <div className="border-t my-2 border-gray-200 dark:border-gray-800"></div>
+
+          {/* 공부하기 메뉴 */}
+          <Link
+            href="/study"
+            onClick={onClose}
+            className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition font-bold"
+          >
+            <FiClock size={20} />
+            공부하기
+          </Link>
+
+          <Link
+            href="/study/live"
+            onClick={onClose}
+            className="flex items-center gap-3 p-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+          >
+            <FiUsers size={20} />
+            실시간 현황
+          </Link>
 
           <div className="border-t my-2 border-gray-200 dark:border-gray-800"></div>
 

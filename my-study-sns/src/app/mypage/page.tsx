@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import MainLayout from "@/component/MainLayout";
 import Link from "next/link";
-import { FiEdit2, FiSave, FiAward, FiFileText, FiBook } from "react-icons/fi";
+import { FiEdit2, FiSave, FiAward, FiFileText, FiBook, FiClock } from "react-icons/fi";
 import KnowledgeCardModal from "@/component/KnowledgeCardModal";
+import StudyCalendar from "@/component/StudyCalendar";
 
 interface Profile {
   username: string;
@@ -245,6 +246,14 @@ export default function MyPage() {
               <p className="text-xs text-center text-gray-400 mt-4">
                 게시글을 많이 쓰고 유용한 정보를 공유할수록 점수가 올라갑니다!
               </p>
+            </div>
+
+            {/* 공부 캘린더 */}
+            <div>
+              <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <FiClock className="text-green-500" /> 공부 기록
+              </h3>
+              <StudyCalendar compact />
             </div>
           </div>
 

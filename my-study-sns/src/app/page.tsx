@@ -2,10 +2,11 @@
 "use client";
 
 import { useState } from 'react';
-import KnowledgeCards from "@/component/KnowledgeCards"; 
-import ScheduleWidget from "@/component/ScheduleWidget"; 
-import Timeline from "@/component/Timeline"; 
-import TopicFilter from "@/component/TopicFilter"; 
+import KnowledgeCards from "@/component/KnowledgeCards";
+import ScheduleWidget from "@/component/ScheduleWidget";
+import Timeline from "@/component/Timeline";
+import TopicFilter from "@/component/TopicFilter";
+import StudyTimer from "@/component/StudyTimer"; 
 
 export default function IndexPage() {
   const [selectedTopic, setSelectedTopic] = useState("전체"); 
@@ -16,8 +17,12 @@ export default function IndexPage() {
       {/* 그리드 레이아웃: 1열 → (md 이상) 12열 */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
 
-        {/* 좌측 영역: 시간표 (4/12) */}
-        <div className="md:col-span-4 space-y-8">
+        {/* 좌측 영역: 공부 타이머 + 시간표 (4/12) */}
+        <div className="md:col-span-4 space-y-6">
+          {/* 공부 타이머 위젯 */}
+          <StudyTimer compact />
+
+          {/* 시간표 */}
           <ScheduleWidget />
         </div>
 

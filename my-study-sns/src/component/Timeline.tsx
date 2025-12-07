@@ -504,7 +504,7 @@ export default function Timeline({ selectedTopic }: { selectedTopic: string }) {
   /* ---------------- render ---------------- */
 
   return (
-    <div className="p-2 sm:p-0 pb-10">
+    <div className="space-y-8">
       <div className="space-y-8">
         <BoardSection
           title="최신 게시글"
